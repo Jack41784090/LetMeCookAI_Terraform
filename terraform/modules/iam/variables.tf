@@ -2,12 +2,6 @@ variable "app_name" {
   description = "Name of the application"
   type        = string
 }
-
-variable "api_gateway_execution_arn" {
-  description = "API Gateway execution ARN for IAM policy"
-  type        = string
-}
-
 variable "dynamodb_table_arn" {
   description = "DynamoDB table ARN for Lambda IAM policy"
   type        = string
