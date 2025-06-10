@@ -26,6 +26,12 @@ variable "log_retention_days" {
   default     = 14
 }
 
+variable "request_script_package_path" {
+  description = "Path to the script-requester Lambda deployment package"
+  type        = string
+  default     = "lambda_packages/request_script.zip"
+}
+
 variable "auth_validator_package_path" {
   description = "Path to the auth validator Lambda deployment package"
   type        = string

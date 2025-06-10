@@ -25,13 +25,13 @@ resource "aws_cloudwatch_log_group" "status_retriever_logs" {
 
 # Lambda function for authentication validation
 resource "aws_lambda_function" "auth_validator" {
-  filename         = var.auth_validator_package_path
-  function_name    = "${var.app_name}-auth-validator"
-  role            = var.lambda_role_arn
-  handler         = "lambda_function.lambda_handler"
-  runtime         = var.lambda_runtime
-  timeout         = var.lambda_timeout
-  
+  filename      = var.auth_validator_package_path
+  function_name = "${var.app_name}-auth-validator"
+  role          = var.lambda_role_arn
+  handler       = "lambda_function.lambda_handler"
+  runtime       = var.lambda_runtime
+  timeout       = var.lambda_timeout
+
   environment {
     variables = {
       REGION = data.aws_region.current.name
@@ -45,12 +45,12 @@ resource "aws_lambda_function" "auth_validator" {
 
 # Lambda function for request processing
 resource "aws_lambda_function" "request_processor" {
-  filename         = var.request_processor_package_path
-  function_name    = "${var.app_name}-request-processor"
-  role            = var.lambda_role_arn
-  handler         = "lambda_function.lambda_handler"
-  runtime         = var.lambda_runtime
-  timeout         = var.lambda_timeout
+  filename      = var.request_processor_package_path
+  function_name = "${var.app_name}-request-processor"
+  role          = var.lambda_role_arn
+  handler       = "lambda_function.lambda_handler"
+  runtime       = var.lambda_runtime
+  timeout       = var.lambda_timeout
 
   environment {
     variables = {
@@ -67,12 +67,12 @@ resource "aws_lambda_function" "request_processor" {
 
 # Lambda function for job status retrieval
 resource "aws_lambda_function" "status_retriever" {
-  filename         = var.status_retriever_package_path
-  function_name    = "${var.app_name}-status-retriever"
-  role            = var.lambda_role_arn
-  handler         = "lambda_function.lambda_handler"
-  runtime         = var.lambda_runtime
-  timeout         = var.lambda_timeout
+  filename      = var.status_retriever_package_path
+  function_name = "${var.app_name}-status-retriever"
+  role          = var.lambda_role_arn
+  handler       = "lambda_function.lambda_handler"
+  runtime       = var.lambda_runtime
+  timeout       = var.lambda_timeout
 
   environment {
     variables = {
@@ -84,4 +84,11 @@ resource "aws_lambda_function" "status_retriever" {
   tags = var.tags
 
   depends_on = [aws_cloudwatch_log_group.status_retriever_logs]
+}
+
+resource "aws_lambda_function" "request_script_from_deepseek" {
+  filename = var.request_script_package_path
+  function_name = "${var.app_name}-request-script"
+  role          = var.lambda_role_arn
+  handler       = "lambda_function.lambda_handler"
 }

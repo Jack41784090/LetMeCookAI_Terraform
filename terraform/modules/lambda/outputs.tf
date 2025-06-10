@@ -27,3 +27,8 @@ output "status_retriever_invoke_arn" {
   description = "Invoke ARN of the status retriever Lambda function"
   value       = aws_lambda_function.status_retriever.invoke_arn
 }
+
+output "request_script_invoke_arn" {
+  description = "Invoke ARN of the request script Lambda function"
+  value       = aws_lambda_function.request_script_from_deepseek.arn
+}
