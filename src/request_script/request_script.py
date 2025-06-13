@@ -1,7 +1,12 @@
 import json
+import os
 from typing import Any, Dict
 import uuid
+import boto3
 from openai import OpenAI
+
+# Explicitly type the SQS client
+sqs = boto3.client('sqs', region_name='us-east-2')
 
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     try:
@@ -49,6 +54,34 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         ],
         stream=False,
     )
+    
+    message_content = response.choices[0].message.content
+    if not response or len(response.choices) == 0 or not message_content:
+        return {
+            "statusCode": 500,
+            "body": json.dumps({
+                "error": "Failed to get a valid response from the model"
+            })
+        }
+    
+    try:
+        sqs.send_message(
+            QueueUrl=os.environ['SQS_QUEUE_URL'],
+            MessageBody=json.dumps({
+                "prompt": prompt,
+                "role": role,
+                "response": message_content
+            }),
+            MessageGroupId=str(uuid.uuid4())  # Ensure unique group ID for FIFO queues
+        )
+    except Exception as e:
+        return {
+            "statusCode": 500,
+            "body": json.dumps({
+                "error": "Failed to send message to SQS",
+                "details": str(e)
+            })
+        }
     
     return {
         "statusCode": 200,

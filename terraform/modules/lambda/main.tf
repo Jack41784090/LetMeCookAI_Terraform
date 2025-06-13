@@ -101,4 +101,10 @@ resource "aws_lambda_function" "request_script_from_deepseek" {
   layers = [
     aws_lambda_layer_version.request_script_from_deepseek_layer.arn
   ]
+
+  environment {
+    variables = {
+      SQS_QUEUE_URL = var.sqs_queue_url
+    }
+  }
 }
