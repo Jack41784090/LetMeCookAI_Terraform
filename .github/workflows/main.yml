@@ -77,11 +77,12 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
+        
       - name: Download Lambda Layers
         uses: actions/download-artifact@v4
         with:
           name: lambda-packages
+          path: terraform/lambda_packages
           
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
