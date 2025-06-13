@@ -80,7 +80,6 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 "role": role,
                 "response": message_content
             }),
-            MessageGroupId=str(uuid.uuid4())  # Ensure unique group ID for FIFO queues
         )
     except Exception as e:
         return {
