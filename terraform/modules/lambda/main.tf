@@ -107,6 +107,8 @@ resource "aws_lambda_function" "request_script_from_deepseek" {
     aws_lambda_layer_version.request_script_from_deepseek_layer.arn
   ]
 
+  timeout = var.lambda_timeout
+
   environment {
     variables = {
       SQS_QUEUE_URL = var.sqs_queue_url
