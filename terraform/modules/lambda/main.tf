@@ -86,9 +86,19 @@ resource "aws_lambda_function" "status_retriever" {
   depends_on = [aws_cloudwatch_log_group.status_retriever_logs]
 }
 
+resource "aws_lambda_layer_version" "request_script_from_deepseek_layer" {
+  filename = "lambda_packages/lambda-layer-request_script.zip"
+  layer_name = "lambda-layer-request_script"
+  compatible_runtimes = ["python3.10"]
+}
+
 resource "aws_lambda_function" "request_script_from_deepseek" {
   filename = var.request_script_package_path
   function_name = "${var.app_name}-request-script"
   role          = var.lambda_role_arn
   handler       = "lambda_function.lambda_handler"
+  runtime = "python3.10"
+  layers = [
+    aws_lambda_layer_version.request_script_from_deepseek_layer.arn
+  ]
 }

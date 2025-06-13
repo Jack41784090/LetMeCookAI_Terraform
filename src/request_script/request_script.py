@@ -44,7 +44,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     response = client.chat.completions.create(
         model="deepseek-chat",
         messages=[
-            { "role": "system", "content": "You are a helpful assistant." },
+            { "role": "system", "content": role },
             { "role": "user", "content": prompt }
         ],
         stream=False,
