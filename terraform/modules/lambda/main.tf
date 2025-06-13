@@ -28,9 +28,10 @@ resource "aws_lambda_function" "auth_validator" {
   filename      = var.auth_validator_package_path
   function_name = "${var.app_name}-auth-validator"
   role          = var.lambda_role_arn
-  handler       = "lambda_function.lambda_handler"
+  handler       = "auth_validator.lambda_handler"
   runtime       = var.lambda_runtime
   timeout       = var.lambda_timeout
+  source_code_hash = filebase64sha256(var.auth_validator_package_path)
 
   environment {
     variables = {
@@ -48,9 +49,10 @@ resource "aws_lambda_function" "request_processor" {
   filename      = var.request_processor_package_path
   function_name = "${var.app_name}-request-processor"
   role          = var.lambda_role_arn
-  handler       = "lambda_function.lambda_handler"
+  handler       = "request_processor.lambda_handler"
   runtime       = var.lambda_runtime
   timeout       = var.lambda_timeout
+  source_code_hash = filebase64sha256(var.request_processor_package_path)
 
   environment {
     variables = {
@@ -70,9 +72,10 @@ resource "aws_lambda_function" "status_retriever" {
   filename      = var.status_retriever_package_path
   function_name = "${var.app_name}-status-retriever"
   role          = var.lambda_role_arn
-  handler       = "lambda_function.lambda_handler"
+  handler       = "status_retriever.lambda_handler"
   runtime       = var.lambda_runtime
   timeout       = var.lambda_timeout
+  source_code_hash = filebase64sha256(var.status_retriever_package_path)
 
   environment {
     variables = {
@@ -90,14 +93,16 @@ resource "aws_lambda_layer_version" "request_script_from_deepseek_layer" {
   filename = "lambda_packages/lambda-layer-request_script.zip"
   layer_name = "lambda-layer-request_script"
   compatible_runtimes = ["python3.10"]
+  source_code_hash = filebase64sha256("lambda_packages/lambda-layer-request_script.zip")
 }
 
 resource "aws_lambda_function" "request_script_from_deepseek" {
   filename = var.request_script_package_path
   function_name = "${var.app_name}-request-script"
   role          = var.lambda_role_arn
-  handler       = "lambda_function.lambda_handler"
+  handler       = "request_script.lambda_handler"
   runtime = "python3.10"
+  source_code_hash = filebase64sha256(var.request_script_package_path)
   layers = [
     aws_lambda_layer_version.request_script_from_deepseek_layer.arn
   ]
