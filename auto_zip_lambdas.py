@@ -163,14 +163,18 @@ def main():
     
     print("-" * 50)
     print("Lambda function zipping completed!")
-    
-    # List all created zip files
+      # List all created zip files
     zip_files = list(output_dir.glob("*.zip"))
     if zip_files:
         print(f"\nCreated {len(zip_files)} zip files:")
         for zip_file in sorted(zip_files):
-            size_mb = zip_file.stat().st_size / (1024 * 1024)
-            print(f"  - {zip_file.name} ({size_mb:.2f} MB)")
+            size_bytes = zip_file.stat().st_size
+            if size_bytes < 1024 * 1024:  # Less than 1MB
+                size_kb = size_bytes / 1024
+                print(f"  - {zip_file.name} ({size_kb:.2f} KB)")
+            else:
+                size_mb = size_bytes / (1024 * 1024)
+                print(f"  - {zip_file.name} ({size_mb:.2f} MB)")
     else:
         print("\nNo zip files were created.")
 
