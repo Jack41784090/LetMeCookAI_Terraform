@@ -106,8 +106,6 @@ jobs:
       - name: Debug Log
         run: |
           ls -la
-          cd terraform
-          ls -la
           cd lambda_packages
           ls -la
 
