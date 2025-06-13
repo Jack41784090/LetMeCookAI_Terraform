@@ -16,6 +16,5 @@ terraform {
 
 provider "aws" {
   region = "us-east-2"
-  profile = "ikec-root-admin"
-  
+  # profile = "ikec-root-admin"
 }
