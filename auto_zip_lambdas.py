@@ -61,10 +61,14 @@ def create_lambda_layer_zip(source_dir, output_dir, layer_name):
     """
     zip_path = output_dir / f"lambda-layer-{layer_name}.zip"
     
-    # Remove existing zip file if it exists
+    # Check if existing zip file contains proper lambda layer packages (created by create_lambda_layer.py)
     if zip_path.exists():
-        zip_path.unlink()
-        print(f"Removed existing {zip_path.name}")
+        if is_proper_lambda_layer(zip_path):
+            print(f"Skipping {zip_path.name} - already contains proper lambda layer packages")
+            return
+        else:
+            zip_path.unlink()
+            print(f"Removed existing {zip_path.name}")
     with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
         # Lambda layers need python/ directory structure
         for file_path in source_dir.rglob("*.py"):
@@ -83,6 +87,49 @@ def create_lambda_layer_zip(source_dir, output_dir, layer_name):
             print(f"Added python/requirements.txt to lambda-layer-{layer_name}.zip")
 
     print(f"Created {zip_path}")
+
+def is_proper_lambda_layer(zip_path):
+    """
+    Check if a lambda layer zip file contains proper installed packages.
+    
+    This helps distinguish between lambda layers created by create_lambda_layer.py
+    (which contain installed packages with proper site-packages structure) and
+    simple code-only layers created by this auto-zip script.
+    
+    Args:
+        zip_path (Path): Path to the zip file to check
+        
+    Returns:
+        bool: True if the zip contains a proper lambda layer with installed packages
+    """
+    try:
+        with zipfile.ZipFile(zip_path, 'r') as zipf:
+            file_list = zipf.namelist()
+            
+            # Look for indicators of properly installed packages
+            # These are typically created by pip install and indicate real dependencies
+            package_indicators = [
+                'python/lib/python',  # Standard lambda layer structure
+                '.dist-info/',        # Package metadata from pip
+                'site-packages/',     # Site packages directory
+                '__pycache__/',       # Compiled Python files from installed packages
+            ]
+            
+            # Check if any of these indicators exist in the zip
+            for indicator in package_indicators:
+                if any(indicator in file_path for file_path in file_list):
+                    return True
+                    
+            # Also check for common third-party packages that indicate proper installation
+            common_packages = ['boto3', 'openai', 'requests', 'numpy', 'pandas']
+            for package in common_packages:
+                if any(f'python/{package}' in file_path or f'{package}/' in file_path for file_path in file_list):
+                    return True
+                    
+        return False
+        
+    except (zipfile.BadZipFile, FileNotFoundError):
+        return False
 
 def main():
     """Main function to zip all Python files for Lambda deployment."""
