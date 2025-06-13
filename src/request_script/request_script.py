@@ -41,10 +41,16 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             })
         }
     
+        
+    print(f"Received prompt: {prompt}")
+    print(f"Received role: {role}")
+
     client = OpenAI(
         base_url="https://api.deepseek.com",
         api_key="sk-7185ba1cf1c640009d041e4cae8af71c"
     )
+    
+    print("Sending request to DeepSeek API...")
 
     response = client.chat.completions.create(
         model="deepseek-chat",
@@ -54,6 +60,8 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         ],
         stream=False,
     )
+    
+    print("Received response from DeepSeek API", response)
     
     message_content = response.choices[0].message.content
     if not response or len(response.choices) == 0 or not message_content:
