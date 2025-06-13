@@ -102,6 +102,14 @@ jobs:
             -backend-config="region=${{ env.AWS_REGION }}" \
             -backend-config="dynamodb_table=${{ secrets.TF_DYNAMODBTABLENAME }}"
 
+      - name: Debug Log
+        run: |
+          ls -la
+          cd terraform
+          ls -la
+          cd lambda_packages
+          ls -la
+
       - name: Terraform Plan
         id: plan
         run: |
