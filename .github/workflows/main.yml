@@ -44,15 +44,7 @@ jobs:
         run: python -m pip install --upgrade pip
         
       - name: Create Lambda Layer Dependencies
-        run: |
-          # Create lambda layer with dependencies  
-          mkdir -p terraform/lambda_packages
-          mkdir -p temp-layer/python
-          pip install boto3 openai --target temp-layer/python
-          cd temp-layer
-          zip -r ../terraform/lambda_packages/dependencies-layer.zip .
-          cd ..
-          rm -rf temp-layer
+        run: python create_lambda_layer.py --requirements
 
       - name: Run Auto-Zip For Lambda Functions
         run: python auto_zip_lambdas.py
@@ -70,7 +62,6 @@ jobs:
           name: lambda-packages
           path: |
             terraform/lambda_packages/*.zip
-            request-script-layer.zip
 
   terraform:
     name: Terraform
