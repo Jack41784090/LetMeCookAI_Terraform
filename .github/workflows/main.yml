@@ -106,8 +106,6 @@ jobs:
       - name: Terraform Init
         id: init
         run: |
-          ls -la
-          cd terraform
           terraform init \
             -backend-config="bucket=${{ secrets.TF_S3BUCKETNAME }}" \
             -backend-config="region=${{ env.AWS_REGION }}" \
