@@ -20,34 +20,21 @@ variable "lambda_timeout" {
   default     = 60
 }
 
-variable "log_retention_days" {
-  description = "Number of days to retain CloudWatch logs"
-  type        = number
-  default     = 14
-}
-
 variable "request_script_package_path" {
   description = "Path to the script-requester Lambda deployment package"
   type        = string
   default     = "lambda_packages/request_script.zip"
 }
 
-variable "auth_validator_package_path" {
-  description = "Path to the auth validator Lambda deployment package"
+variable "request_video_generation_package_path" {
+  description = "Path to the request video generation Lambda deployment package"
   type        = string
-  default     = "lambda_packages/auth_validator.zip"
+  default     = "lambda_packages/request_video_generation.zip"
 }
 
-variable "request_processor_package_path" {
-  description = "Path to the request processor Lambda deployment package"
+variable "generated_videos_s3_bucket_name" {
+  description = "Name of the S3 bucket for storing generated videos"
   type        = string
-  default     = "lambda_packages/request_processor.zip"
-}
-
-variable "status_retriever_package_path" {
-  description = "Path to the status retriever Lambda deployment package"
-  type        = string
-  default     = "lambda_packages/status_retriever.zip"
 }
 
 variable "sqs_queue_url" {
