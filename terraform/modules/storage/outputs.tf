@@ -13,16 +13,6 @@ output "lambda_trigger_arn" {
   value       = aws_lambda_event_source_mapping.job_queue_trigger.arn
 }
 
-output "dynamodb_table_name" {
-  description = "Name of the DynamoDB job status table"
-  value       = aws_dynamodb_table.job_status.name
-}
-
-output "dynamodb_table_arn" {
-  description = "ARN of the DynamoDB job status table"
-  value       = aws_dynamodb_table.job_status.arn
-}
-
 output "generated_video_bucket_name" {
   description = "Name of the S3 bucket for generated videos"
   value       = aws_s3_bucket.generated_videos_bucket
