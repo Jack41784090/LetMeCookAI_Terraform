@@ -114,8 +114,8 @@ jobs:
         run: |
           terraform plan \
             -out=tfplan \
-            -var="environment=${{ github.event.inputs.environment || 'dev' }}"
-        # -var="twitter_api_key=${{ secrets.TWITTER_API_KEY }}" \
+            -var="environment=${{ github.event.inputs.environment || 'dev' }}" \
+            -var="fal_key=${{ secrets.FAL_API_KEY }}"
         # -var="twitter_api_secret=${{ secrets.TWITTER_API_SECRET }}" \
         # -var="twitter_access_token=${{ secrets.TWITTER_ACCESS_TOKEN }}" \
         # -var="twitter_access_token_secret=${{ secrets.TWITTER_ACCESS_TOKEN_SECRET }}" \
