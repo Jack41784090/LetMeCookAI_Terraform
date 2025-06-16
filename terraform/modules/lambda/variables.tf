@@ -37,6 +37,11 @@ variable "generated_videos_s3_bucket_name" {
   type        = string
 }
 
+variable "fal_key" {
+  description = "API key for FAL service"
+  type        = string
+}
+
 variable "sqs_queue_url" {
   description = "URL of the SQS queue for job processing"
   type        = string
