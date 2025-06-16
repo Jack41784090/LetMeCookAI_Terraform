@@ -13,7 +13,7 @@ module "storage" {
   app_name                      = local.app_name
   sqs_message_retention_seconds = var.sqs_message_retention_seconds
   tags                          = local.tags
-  trigger_lambda_arn = module.lambda.request_video_generation_invoke_arn
+  trigger_lambda_arn            = module.lambda.request_video_generation_invoke_arn
 }
 
 # IAM Module - Roles, policies, and groups
@@ -27,21 +27,17 @@ module "iam" {
 
 # Lambda Module - Lambda functions and CloudWatch logs
 module "lambda" {
-  source                         = "./modules/lambda"
-  app_name                       = local.app_name
-  lambda_role_arn                = module.iam.lambda_role_arn
-  lambda_runtime                 = var.lambda_runtime
-  lambda_timeout                 = var.lambda_timeout
-  log_retention_days             = var.log_retention_days
-  request_script_package_path    = "lambda_packages/request_script.zip"
-  auth_validator_package_path    = "lambda_packages/auth_validator.zip"
-  request_processor_package_path = "lambda_packages/request_processor.zip"
-  status_retriever_package_path  = "lambda_packages/status_retriever.zip"
-  sqs_queue_url                  = module.storage.sqs_queue_url
-  dynamodb_table_name            = module.storage.dynamodb_table_name
-  tags                           = local.tags
-  s3_bucket_name = module.storage.generated_video_bucket_name
-  }
+  source                          = "./modules/lambda"
+  app_name                        = local.app_name
+  lambda_role_arn                 = module.iam.lambda_role_arn
+  lambda_runtime                  = var.lambda_runtime
+  lambda_timeout                  = var.lambda_timeout
+  request_script_package_path     = "lambda_packages/request_script.zip"
+  sqs_queue_url                   = module.storage.sqs_queue_url
+  tags                            = local.tags
+  generated_videos_s3_bucket_name = module.storage.generated_video_bucket_name
+  fal_key                         = var.fal_key
+}
 
 module "scheduler" {
   source                     = "./modules/scheduler"

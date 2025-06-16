@@ -125,3 +125,8 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "fal_key" {
+  description = "FAL API key"
+  type        = string
+}
