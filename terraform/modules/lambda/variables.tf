@@ -42,11 +42,6 @@ variable "sqs_queue_url" {
   type        = string
 }
 
-variable "dynamodb_table_name" {
-  description = "Name of the DynamoDB table for job status"
-  type        = string
-}
-
 variable "tags" {
   description = "Tags to apply to all resources"
   type        = map(string)
