@@ -12,6 +12,15 @@ resource "aws_sqs_queue" "job_queue" {
   tags = var.tags
 }
 
+# Lambda event source mapping for SQS queue trigger
+resource "aws_lambda_event_source_mapping" "job_queue_trigger" {
+  event_source_arn = aws_sqs_queue.job_queue.arn
+  function_name    = var.trigger_lambda_arn
+  batch_size       = 10
+  
+  depends_on = [aws_sqs_queue.job_queue]
+}
+
 # DynamoDB table for job status tracking
 resource "aws_dynamodb_table" "job_status" {
   name           = "${var.app_name}-job-status"
@@ -40,4 +49,19 @@ resource "aws_dynamodb_table" "job_status" {
   }
 
   tags = var.tags
+}
+
+resource "aws_s3_bucket" "generated_videos_bucket" {
+  bucket = "${var.app_name}-generated-videos"
+
+  tags = var.tags
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+resource "aws_s3_bucket_acl" "generated_videos_bucket_acl" {
+  bucket = aws_s3_bucket.generated_videos_bucket.id
+  acl    = "private"
 }

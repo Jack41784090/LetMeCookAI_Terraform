@@ -14,3 +14,8 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "trigger_lambda_arn" {
+  description = "ARN of the Lambda function to trigger when new messages arrive in job_queue"
+  type        = string
+}
