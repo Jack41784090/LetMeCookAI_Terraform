@@ -13,6 +13,7 @@ module "storage" {
   app_name                      = local.app_name
   sqs_message_retention_seconds = var.sqs_message_retention_seconds
   tags                          = local.tags
+  trigger_lambda_arn = module.lambda.request_video_generation_invoke_arn
 }
 
 # IAM Module - Roles, policies, and groups
@@ -39,7 +40,8 @@ module "lambda" {
   sqs_queue_url                  = module.storage.sqs_queue_url
   dynamodb_table_name            = module.storage.dynamodb_table_name
   tags                           = local.tags
-}
+  s3_bucket_name = module.storage.generated_video_bucket_name
+  }
 
 module "scheduler" {
   source                     = "./modules/scheduler"
