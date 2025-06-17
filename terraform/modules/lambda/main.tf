@@ -56,6 +56,4 @@ resource "aws_lambda_function" "request_video_generation" {
   }
 
   tags = var.tags
-
-  depends_on = [aws_cloudwatch_log_group.request_processor_logs]
 }
