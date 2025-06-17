@@ -15,5 +15,5 @@ output "lambda_trigger_arn" {
 
 output "generated_video_bucket_name" {
   description = "Name of the S3 bucket for generated videos"
-  value       = aws_s3_bucket.generated_videos_bucket
+  value       = aws_s3_bucket.generated_videos_bucket.bucket
 }
