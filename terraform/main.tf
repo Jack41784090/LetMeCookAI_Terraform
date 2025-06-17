@@ -20,7 +20,6 @@ module "storage" {
 module "iam" {
   source             = "./modules/iam"
   app_name           = local.app_name
-  dynamodb_table_arn = module.storage.dynamodb_table_arn
   sqs_queue_arn      = module.storage.sqs_queue_arn
   tags               = local.tags
 }
