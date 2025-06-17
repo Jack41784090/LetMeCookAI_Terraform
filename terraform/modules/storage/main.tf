@@ -3,11 +3,12 @@
 
 # SQS Queue for job processing
 resource "aws_sqs_queue" "job_queue" {
-  name                      = "${var.app_name}-job-queue"
-  delay_seconds            = 0
-  max_message_size         = 262144
-  message_retention_seconds = var.sqs_message_retention_seconds
-  receive_wait_time_seconds = 10
+  name                       = "${var.app_name}-job-queue"
+  delay_seconds              = 0
+  max_message_size           = 262144
+  message_retention_seconds  = var.sqs_message_retention_seconds
+  receive_wait_time_seconds  = 10
+  visibility_timeout_seconds = 1800 # 30 minutes (6x Lambda timeout of 300s)
 
   tags = var.tags
 }
@@ -17,15 +18,15 @@ resource "aws_lambda_event_source_mapping" "job_queue_trigger" {
   event_source_arn = aws_sqs_queue.job_queue.arn
   function_name    = var.trigger_lambda_arn
   batch_size       = 10
-  
+
   depends_on = [aws_sqs_queue.job_queue]
 }
 
 # DynamoDB table for job status tracking
 resource "aws_dynamodb_table" "job_status" {
-  name           = "${var.app_name}-job-status"
-  billing_mode   = "PAY_PER_REQUEST"
-  hash_key       = "job_id"
+  name         = "${var.app_name}-job-status"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "job_id"
 
   attribute {
     name = "job_id"
@@ -59,9 +60,4 @@ resource "aws_s3_bucket" "generated_videos_bucket" {
   lifecycle {
     prevent_destroy = true
   }
-}
-
-resource "aws_s3_bucket_acl" "generated_videos_bucket_acl" {
-  bucket = aws_s3_bucket.generated_videos_bucket.id
-  acl    = "private"
 }
