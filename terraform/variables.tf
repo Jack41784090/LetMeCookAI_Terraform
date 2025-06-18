@@ -39,7 +39,7 @@ variable "lambda_timeout" {
 variable "lambda_runtime" {
   description = "Runtime for Lambda functions"
   type        = string
-  default     = "python3.9"
+  default     = "python3.10"
 }
 
 variable "job_retention_days" {
