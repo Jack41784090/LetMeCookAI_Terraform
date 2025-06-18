@@ -19,7 +19,7 @@ dynamodb = boto3.client('dynamodb', region_name='us-east-2')
 # Environment variables
 SQS_QUEUE_URL = os.environ.get('SQS_QUEUE_URL')
 S3_BUCKET = os.environ.get('S3_BUCKET')
-JOB_STATUS_TABLE = os.environ.get('JOB_STATUS_TABLE')
+# JOB_STATUS_TABLE = os.environ.get('JOB_STATUS_TABLE')
 FAL_KEY = os.environ.get('FAL_KEY')  # FAL API key for Bytedance Seedance
 
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
@@ -277,20 +277,26 @@ def call_video_generation_api(video_request: Dict[str, Any]) -> Dict[str, Any]:
         # Set up FAL client with API key
         os.environ['FAL_KEY'] = FAL_KEY
         
-        def on_queue_update(update):
-            if isinstance(update, fal_client.InProgress):
-                for log in update.logs:
-                    logger.info(f"FAL Queue Update: {log.get('message', '')}")
+        # def on_queue_update(update):
+        #     if isinstance(update, fal_client.InProgress):
+        #         for log in update.logs:
+        #             logger.info(f"FAL Queue Update: {log.get('message', '')}")
         
-        logger.info(f"Submitting video generation request: {video_request}")
+        # logger.info(f"Submitting video generation request: {video_request}")
         
-        # Submit request to Bytedance Seedance via FAL
-        result = fal_client.subscribe(
-            "fal-ai/bytedance/seedance/v1/lite/text-to-video",
-            arguments=video_request,
-            with_logs=True,
-            on_queue_update=on_queue_update,
-        )
+        # # Submit request to Bytedance Seedance via FAL
+        # result = fal_client.subscribe(
+        #     "fal-ai/bytedance/seedance/v1/lite/text-to-video",
+        #     arguments=video_request,
+        #     with_logs=True,
+        #     on_queue_update=on_queue_update,
+        # )
+        time.sleep(2)
+        result = {
+            'video': {
+                'url': ''
+            }
+        }
         
         logger.info(f"Video generation successful: {result}")
         
@@ -346,12 +352,6 @@ def store_video_results(video_results: List[Dict[str, Any]], prompt: str, role: 
             ContentType='application/json'
         )
         logger.info(f"Stored video results in S3: {s3_key}")
-        
-        # Optionally store in DynamoDB for easier querying
-        if JOB_STATUS_TABLE:
-            # This would require a proper job_id from the original request
-            # For now, we'll skip DynamoDB storage
-            pass
             
     except Exception as e:
         logger.error(f"Error storing video results: {str(e)}")
