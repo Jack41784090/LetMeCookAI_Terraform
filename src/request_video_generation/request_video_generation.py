@@ -6,6 +6,8 @@ import fal_client
 import time
 from typing import Any, Dict, List
 import re
+import requests
+from urllib.parse import urlparse
 
 # Configure logging
 logger = logging.getLogger()
@@ -258,7 +260,7 @@ def generate_videos_for_scenes(scenes: List[Dict[str, Any]], original_prompt: st
                 'duration': duration,
                 'video_request': video_request,
                 'video_result': video_result,
-                'status': 'success' if video_result.get('video_url') else 'failed'
+                'status': 'success' if video_result.get('video') else 'failed'
             })
             
             # Add delay between requests to respect API rate limits
@@ -314,21 +316,48 @@ def call_video_generation_api(video_request: Dict[str, Any]) -> Dict[str, Any]:
         time.sleep(2)
         result = {
             'video': {
-                'url': ''
+                'url': 'https://v3.fal.media/files/penguin/qmLZSvOIzTKs6bDFXiEtH_video.mp4'
             }
         }
         
         logger.info(f"Video generation successful: {result}")
-        
-        # Extract video URL from result
+          # Extract video URL from result
         if result and 'video' in result and 'url' in result['video']:
-            return {
-                'video_url': result['video']['url'],
+            video_url = result['video']['url']
+            
+            # Generate S3 key for storing the video
+            timestamp = int(time.time())
+            parsed_url = urlparse(video_url)
+            filename = os.path.basename(parsed_url.path) or f"video_{timestamp}.mp4"
+            s3_key = f"generated-videos/{timestamp}/{filename}"
+            
+            # Download and store the video in S3
+            download_result = download_video_to_s3(video_url, s3_key)
+            
+            response_data = {
+                'original_video_url': video_url,
                 'seed': result.get('seed'),
                 'file_size': result['video'].get('file_size'),
                 'content_type': result['video'].get('content_type', 'video/mp4'),
                 'success': True
             }
+            
+            # Add S3 information if download was successful
+            if download_result['success']:
+                response_data.update({
+                    's3_key': download_result['s3_key'],
+                    's3_url': download_result['s3_url'],
+                    'stored_in_s3': True,
+                    'download_size_bytes': download_result.get('size_bytes')
+                })
+            else:
+                response_data.update({
+                    'stored_in_s3': False,
+                    'download_error': download_result['error']
+                })
+                logger.warning(f"Video generated but download failed: {download_result['error']}")
+            
+            return response_data
         else:
             logger.error(f"No video URL in result: {result}")
             return {'error': 'No video URL in response', 'details': result}
@@ -375,3 +404,70 @@ def store_video_results(video_results: List[Dict[str, Any]], prompt: str, role: 
             
     except Exception as e:
         logger.error(f"Error storing video results: {str(e)}")
+
+def download_video_to_s3(video_url: str, s3_key: str) -> Dict[str, Any]:
+    """
+    Download video from URL and store it in S3.
+    
+    Args:
+        video_url: URL of the video to download
+        s3_key: S3 key where the video will be stored
+        
+    Returns:
+        Dictionary with download status and S3 location
+    """
+    try:
+        if not S3_BUCKET:
+            raise ValueError("S3_BUCKET environment variable not set")
+        
+        logger.info(f"Downloading video from: {video_url}")
+        
+        # Download the video with streaming
+        response = requests.get(video_url, stream=True, timeout=300)
+        response.raise_for_status()
+        
+        # Get content type from response headers
+        content_type = response.headers.get('content-type', 'video/mp4')
+        content_length = response.headers.get('content-length')
+        
+        logger.info(f"Video size: {content_length} bytes, Content-Type: {content_type}")
+        
+        # Upload directly to S3 using streaming
+        s3.upload_fileobj(
+            response.raw,
+            S3_BUCKET,
+            s3_key,
+            ExtraArgs={
+                'ContentType': content_type,
+                'Metadata': {
+                    'source_url': video_url,
+                    'download_timestamp': str(int(time.time()))
+                }
+            }
+        )
+        
+        # Generate S3 URL
+        s3_url = f"https://{S3_BUCKET}.s3.amazonaws.com/{s3_key}"
+        
+        logger.info(f"Video successfully uploaded to S3: {s3_url}")
+        
+        return {
+            'success': True,
+            's3_key': s3_key,
+            's3_url': s3_url,
+            'content_type': content_type,
+            'size_bytes': content_length
+        }
+        
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Error downloading video from {video_url}: {str(e)}")
+        return {
+            'success': False,
+            'error': f'Download failed: {str(e)}'
+        }
+    except Exception as e:
+        logger.error(f"Error uploading video to S3: {str(e)}")
+        return {
+            'success': False,
+            'error': f'S3 upload failed: {str(e)}'
+        }

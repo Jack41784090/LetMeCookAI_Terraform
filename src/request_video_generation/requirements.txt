@@ -1,2 +1,3 @@
 boto3>=1.26.0
 fal-client>=0.4.0
+requests>=2.25.0
