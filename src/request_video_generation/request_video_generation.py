@@ -37,8 +37,20 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         processed_count = 0
         failed_count = 0
         
-        # Process each SQS record
-        for record in event.get('Records', []):
+        logger.info(f"Received event: {json.dumps(event, default=str)}")
+        
+        # Check if this is a direct event (for testing) or SQS event
+        if 'Records' in event:
+            # Process SQS records
+            logger.info(f"Processing {len(event['Records'])} SQS records")
+            records_to_process = event['Records']
+        else:
+            # Direct event for testing - wrap it as a single record
+            logger.info("Processing direct event (test mode)")
+            records_to_process = [{'body': json.dumps(event)}]
+        
+        # Process each record
+        for record in records_to_process:
             try:
                 # Parse the SQS message body
                 message_body = json.loads(record['body'])
