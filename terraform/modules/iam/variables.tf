@@ -13,3 +13,8 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "generated_video_bucket_arn" {
+  description = "The bucket arn in which holds the generated videos"
+  type = string
+}
