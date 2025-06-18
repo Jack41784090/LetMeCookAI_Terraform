@@ -54,15 +54,17 @@ resource "aws_iam_role_policy" "lambda_policy" {
           "sts:GetCallerIdentity"
         ]
         Resource = "*"
-      },
-      {
+      },      {
         Effect = "Allow",
         Action = [
           "s3:PutObject",
           "s3:DeleteObject",
           "s3:ListBucket"
         ]
-        Resource = var.generated_video_bucket_arn
+        Resource = [
+          var.generated_video_bucket_arn,
+          "${var.generated_video_bucket_arn}/*"
+        ]
       }
     ]
   })

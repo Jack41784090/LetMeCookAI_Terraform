@@ -22,6 +22,7 @@ module "iam" {
   app_name           = local.app_name
   sqs_queue_arn      = module.storage.sqs_queue_arn
   tags               = local.tags
+  generated_video_bucket_arn = module.storage.generated_video_bucket_arn
 }
 
 # Lambda Module - Lambda functions and CloudWatch logs
