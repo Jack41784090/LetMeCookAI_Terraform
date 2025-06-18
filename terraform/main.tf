@@ -29,8 +29,8 @@ module "lambda" {
   source                          = "./modules/lambda"
   app_name                        = local.app_name
   lambda_role_arn                 = module.iam.lambda_role_arn
-  lambda_runtime                  = var.lambda_runtime
-  lambda_timeout                  = 60
+  lambda_runtime                  = "python3.10"
+  lambda_timeout                  = var.lambda_timeout
   request_script_package_path     = "lambda_packages/request_script.zip"
   sqs_queue_url                   = module.storage.sqs_queue_url
   tags                            = local.tags
