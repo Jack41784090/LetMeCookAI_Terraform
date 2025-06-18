@@ -107,7 +107,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             })
         }
 
-def extract_scenes_from_response(response: str) -> List[Dict[str, Any]]:
+def extract_scenes_from_response(response) -> List[Dict[str, Any]]:
     """
     Extract scene descriptions from the AI response.
     
@@ -121,7 +121,12 @@ def extract_scenes_from_response(response: str) -> List[Dict[str, Any]]:
     
     try:
         # Parse the JSON response from the AI
-        parsed_response = json.loads(response)
+        if isinstance(response, dict):
+            # Response is already a dictionary (direct test event)
+            parsed_response = response
+        else:
+            # Response is a JSON string (from SQS)
+            parsed_response = json.loads(response)
         
         # Handle structured video script format
         if isinstance(parsed_response, dict) and 'scenes' in parsed_response:
@@ -146,8 +151,7 @@ def extract_scenes_from_response(response: str) -> List[Dict[str, Any]]:
         # Handle simple list format
         elif isinstance(parsed_response, list):
             return [{'description': scene, 'duration': 10} for scene in parsed_response]
-        
-        # Handle simple dict without scenes key
+          # Handle simple dict without scenes key
         elif isinstance(parsed_response, dict):
             # Try to find scene-like content in the dict
             for key, value in parsed_response.items():
@@ -157,33 +161,37 @@ def extract_scenes_from_response(response: str) -> List[Dict[str, Any]]:
     except json.JSONDecodeError:
         logger.warning("Response is not valid JSON, attempting text parsing")
         
-        # Fallback to text parsing for non-JSON responses
-        scene_patterns = [
-            r'Scene \d+[:\-]\s*(.+?)(?=Scene \d+|$)',
-            r'\d+\.\s*(.+?)(?=\d+\.|$)',
-            r'- (.+?)(?=\n-|$)',
-        ]
-        
-        for pattern in scene_patterns:
-            matches = re.findall(pattern, response, re.MULTILINE | re.DOTALL)
-            if matches:
-                scenes = [{'description': match.strip(), 'duration': 10} for match in matches if match.strip()]
-                break
-          # If no structured scenes found, split by sentences or paragraphs
-        if not scenes:
-            paragraphs = [p.strip() for p in response.split('\n\n') if p.strip()]
-            if len(paragraphs) > 1:
-                scenes = [{'description': para, 'duration': 10} for para in paragraphs]
-            else:
-                sentences = [s.strip() for s in response.split('.') if s.strip() and len(s.strip()) > 20]
-                scenes = [{'description': sentence + '.', 'duration': 8} for sentence in sentences[:5]]
-        
-        logger.info(f"Extracted {len(scenes)} scenes from text parsing")
+        # Only do text parsing if response is a string
+        if isinstance(response, str):
+            # Fallback to text parsing for non-JSON responses
+            scene_patterns = [
+                r'Scene \d+[:\-]\s*(.+?)(?=Scene \d+|$)',
+                r'\d+\.\s*(.+?)(?=\d+\.|$)',
+                r'- (.+?)(?=\n-|$)',
+            ]
+            
+            for pattern in scene_patterns:
+                matches = re.findall(pattern, response, re.MULTILINE | re.DOTALL)
+                if matches:
+                    scenes = [{'description': match.strip(), 'duration': 10} for match in matches if match.strip()]
+                    break
+            
+            # If no structured scenes found, split by sentences or paragraphs
+            if not scenes:
+                paragraphs = [p.strip() for p in response.split('\n\n') if p.strip()]
+                if len(paragraphs) > 1:
+                    scenes = [{'description': para, 'duration': 10} for para in paragraphs]
+                else:
+                    sentences = [s.strip() for s in response.split('.') if s.strip() and len(s.strip()) > 20]
+                    scenes = [{'description': sentence + '.', 'duration': 8} for sentence in sentences[:5]]
+            
+            logger.info(f"Extracted {len(scenes)} scenes from text parsing")
         
     except Exception as e:
         logger.error(f"Error extracting scenes: {str(e)}")
     
     # Return scenes (empty list if nothing found)
+    return scenes
     return scenes
 
 def generate_videos_for_scenes(scenes: List[Dict[str, Any]], original_prompt: str, role: str) -> List[Dict[str, Any]]:
