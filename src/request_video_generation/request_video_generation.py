@@ -210,6 +210,9 @@ def generate_videos_for_scenes(scenes: List[Dict[str, Any]], original_prompt: st
     """
     video_results = []
     
+    # Generate unique job ID for this video generation batch
+    job_id = f"job_{int(time.time())}_{hash(original_prompt) % 10000}"
+    
     for i, scene in enumerate(scenes):
         try:
             # Get scene description - handle both structured and simple formats
@@ -248,9 +251,8 @@ def generate_videos_for_scenes(scenes: List[Dict[str, Any]], original_prompt: st
                 master_context = scene['master_prompt_context']
                 if master_context.get('positive_prefix'):
                     video_request['prompt'] = f"{master_context['positive_prefix']} {scene_description}"
-            
-            # Make request to external video generation API
-            video_result = call_video_generation_api(video_request)
+              # Make request to external video generation API
+            video_result = call_video_generation_api(video_request, job_id, scene_number)
             
             video_results.append({
                 'scene_index': i,
@@ -281,12 +283,14 @@ def generate_videos_for_scenes(scenes: List[Dict[str, Any]], original_prompt: st
     
     return video_results
 
-def call_video_generation_api(video_request: Dict[str, Any]) -> Dict[str, Any]:
+def call_video_generation_api(video_request: Dict[str, Any], job_id: str, scene_number: int) -> Dict[str, Any]:
     """
     Call Bytedance Seedance video generation API using FAL client.
     
     Args:
         video_request: Video generation parameters
+        job_id: Unique identifier for this video generation job
+        scene_number: Scene number within the job
         
     Returns:
         API response with video URL or error
@@ -320,16 +324,19 @@ def call_video_generation_api(video_request: Dict[str, Any]) -> Dict[str, Any]:
             }
         }
         
-        logger.info(f"Video generation successful: {result}")
-          # Extract video URL from result
+        logger.info(f"Video generation successful: {result}")        # Extract video URL from result
         if result and 'video' in result and 'url' in result['video']:
             video_url = result['video']['url']
             
-            # Generate S3 key for storing the video
-            timestamp = int(time.time())
+            # Generate S3 key with job_id folder structure
             parsed_url = urlparse(video_url)
-            filename = os.path.basename(parsed_url.path) or f"video_{timestamp}.mp4"
-            s3_key = f"generated-videos/{timestamp}/{filename}"
+            filename = os.path.basename(parsed_url.path) or f"scene_{scene_number:02d}.mp4"
+            # Ensure filename includes scene number for easy ordering
+            if not filename.startswith(f"scene_{scene_number:02d}"):
+                name, ext = os.path.splitext(filename)
+                filename = f"scene_{scene_number:02d}_{name}{ext}"
+            
+            s3_key = f"generated-videos/{job_id}/{filename}"
             
             # Download and store the video in S3
             download_result = download_video_to_s3(video_url, s3_key)
