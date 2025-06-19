@@ -1,3 +1,4 @@
 terraform/lambda_packages
 terraform/.terraform
 *.venv
+terraform/.terraform.lock.hcl
