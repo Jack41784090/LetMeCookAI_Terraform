@@ -37,6 +37,8 @@ module "lambda" {
   tags                            = local.tags
   generated_videos_s3_bucket_name = module.storage.generated_video_bucket_name
   fal_key                         = var.fal_key
+  compose_media_package_path      = "lambda_packages/compose_media.zip"
+  job_coordination_table_name     = module.storage.job_coordination_table_name
 }
 
 module "scheduler" {

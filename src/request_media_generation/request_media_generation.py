@@ -765,17 +765,22 @@ def update_job_coordination_status(
             },
         )
 
-        logger.info(f"Updated {component}_status = {status} for job {job_id}")
-
-        # If video_audio is complete, trigger composition
+        logger.info(
+            f"Updated {component}_status = {status} for job {job_id}"
+        )  # If video_audio is complete, trigger composition
         if component == "video_audio" and status == "complete":
             logger.info(
                 f"Both video and audio ready for job {job_id}, triggering composition"
             )
 
             try:
+                compose_function_name = os.environ.get("COMPOSE_FUNCTION_NAME")
+                if not compose_function_name:
+                    logger.error("COMPOSE_FUNCTION_NAME environment variable not set")
+                    return
+
                 lambda_client.invoke(
-                    FunctionName="letmecookai-compose-media",
+                    FunctionName=compose_function_name,
                     InvocationType="Event",
                     Payload=json.dumps({"job_id": job_id}),
                 )

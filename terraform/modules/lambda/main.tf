@@ -56,9 +56,40 @@ resource "aws_lambda_function" "request_media_generation" {
 
   environment {
     variables = {
-      FAL_KEY       = var.fal_key
-      JOB_QUEUE_URL = var.sqs_queue_url
-      S3_BUCKET     = var.generated_videos_s3_bucket_name
+      FAL_KEY                   = var.fal_key
+      JOB_QUEUE_URL             = var.sqs_queue_url
+      S3_BUCKET                 = var.generated_videos_s3_bucket_name
+      COMPOSE_FUNCTION_NAME     = "${var.app_name}-compose-media"
+      JOB_COORDINATION_TABLE    = var.job_coordination_table_name
+    }
+  }
+
+  tags = var.tags
+}
+
+resource "aws_lambda_layer_version" "compose_media_layer" {
+  filename            = "lambda_packages/lambda-layer-compose_media.zip"
+  layer_name          = "lambda-layer-compose_media"
+  compatible_runtimes = ["python3.10"]
+  source_code_hash    = filebase64sha256("lambda_packages/lambda-layer-compose_media.zip")
+}
+
+resource "aws_lambda_function" "compose_media" {
+  filename         = var.compose_media_package_path
+  function_name    = "${var.app_name}-compose-media"
+  role             = var.lambda_role_arn
+  handler          = "compose_media.lambda_handler"
+  runtime          = var.lambda_runtime
+  timeout          = var.lambda_timeout * 15 # Extended timeout for video processing
+  source_code_hash = filebase64sha256(var.compose_media_package_path)
+  layers = [
+    aws_lambda_layer_version.compose_media_layer.arn
+  ]
+
+  environment {
+    variables = {
+      S3_BUCKET              = var.generated_videos_s3_bucket_name
+      JOB_COORDINATION_TABLE = var.job_coordination_table_name
     }
   }
 

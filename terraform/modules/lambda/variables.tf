@@ -46,6 +46,17 @@ variable "sqs_queue_url" {
   type        = string
 }
 
+variable "compose_media_package_path" {
+  description = "Path to the compose media Lambda deployment package"
+  type        = string
+  default     = "lambda_packages/compose_media.zip"
+}
+
+variable "job_coordination_table_name" {
+  description = "Name of the DynamoDB table for job coordination"
+  type        = string
+}
+
 variable "tags" {
   description = "Tags to apply to all resources"
   type        = map(string)
