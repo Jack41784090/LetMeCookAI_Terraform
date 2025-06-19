@@ -6,7 +6,7 @@ variable "app_name" {
 variable "sqs_message_retention_seconds" {
   description = "Message retention period for SQS queue in seconds"
   type        = number
-  default     = 1209600  # 14 days
+  default     = 1209600 # 14 days
 }
 
 variable "tags" {
@@ -15,14 +15,8 @@ variable "tags" {
   default     = {}
 }
 
-variable "video_generation_lambda_invoke_arn" {
-  description = "ARN of the Lambda function to trigger for vid gen when new messages arrive in job_queue"
-  type        = string
-}
-
-
-variable "audio_generation_lambda_invoke_arn" {
-  description = "ARN of the Lambda function to trigger for vid gen when new messages arrive in job_queue"
+variable "media_generation_invoke_arn" {
+  description = "ARN of the Lambda function to invoke for media generation"
   type        = string
 }
 
