@@ -15,7 +15,14 @@ variable "tags" {
   default     = {}
 }
 
-variable "trigger_lambda_arn" {
-  description = "ARN of the Lambda function to trigger when new messages arrive in job_queue"
+variable "video_generation_lambda_invoke_arn" {
+  description = "ARN of the Lambda function to trigger for vid gen when new messages arrive in job_queue"
   type        = string
 }
+
+
+variable "audio_generation_lambda_invoke_arn" {
+  description = "ARN of the Lambda function to trigger for vid gen when new messages arrive in job_queue"
+  type        = string
+}
+

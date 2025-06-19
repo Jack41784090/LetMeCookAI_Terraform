@@ -16,7 +16,14 @@ resource "aws_sqs_queue" "job_queue" {
 # Lambda event source mapping for SQS queue trigger
 resource "aws_lambda_event_source_mapping" "job_queue_trigger" {
   event_source_arn = aws_sqs_queue.job_queue.arn
-  function_name    = var.trigger_lambda_arn
+  function_name    = var.video_generation_lambda_invoke_arn
+  batch_size       = 10
+
+  depends_on = [aws_sqs_queue.job_queue]
+}
+resource "aws_lambda_event_source_mapping" "job_queue_audio_trigger" {
+  event_source_arn = aws_sqs_queue.job_queue.arn
+  function_name    = var.audio_generation_lambda_invoke_arn
   batch_size       = 10
 
   depends_on = [aws_sqs_queue.job_queue]

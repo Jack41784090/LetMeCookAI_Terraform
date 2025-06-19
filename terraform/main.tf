@@ -9,19 +9,20 @@ locals {
 
 # Storage Module - DynamoDB and SQS
 module "storage" {
-  source                        = "./modules/storage"
-  app_name                      = local.app_name
-  sqs_message_retention_seconds = var.sqs_message_retention_seconds
-  tags                          = local.tags
-  trigger_lambda_arn            = module.lambda.request_video_generation_invoke_arn
+  source                             = "./modules/storage"
+  app_name                           = local.app_name
+  sqs_message_retention_seconds      = var.sqs_message_retention_seconds
+  tags                               = local.tags
+  video_generation_lambda_invoke_arn = module.lambda.request_video_generation_invoke_arn
+  audio_generation_lambda_invoke_arn = module.lambda.request_audio_generation_invoke_arn
 }
 
 # IAM Module - Roles, policies, and groups
 module "iam" {
-  source             = "./modules/iam"
-  app_name           = local.app_name
-  sqs_queue_arn      = module.storage.sqs_queue_arn
-  tags               = local.tags
+  source                     = "./modules/iam"
+  app_name                   = local.app_name
+  sqs_queue_arn              = module.storage.sqs_queue_arn
+  tags                       = local.tags
   generated_video_bucket_arn = module.storage.generated_video_bucket_arn
 }
 
