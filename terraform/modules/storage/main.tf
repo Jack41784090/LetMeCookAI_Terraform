@@ -59,6 +59,36 @@ resource "aws_dynamodb_table" "job_status" {
   tags = var.tags
 }
 
+# DynamoDB table for job status coordination
+resource "aws_dynamodb_table" "job_coordination" {
+  name         = "${var.app_name}-job-coordination"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "job_id"
+
+  attribute {
+    name = "job_id"
+    type = "S"
+  }
+
+  attribute {
+    name = "status"
+    type = "S"
+  }
+
+  global_secondary_index {
+    name            = "status-index"
+    hash_key        = "status"
+    projection_type = "ALL"
+  }
+
+  ttl {
+    attribute_name = "expires_at"
+    enabled        = true
+  }
+
+  tags = var.tags
+}
+
 resource "aws_s3_bucket" "generated_videos_bucket" {
   bucket = "${var.app_name}-generated-videos"
 

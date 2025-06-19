@@ -13,7 +13,7 @@ module "storage" {
   app_name                           = local.app_name
   sqs_message_retention_seconds      = var.sqs_message_retention_seconds
   tags                               = local.tags
-  video_generation_lambda_invoke_arn = module.lambda.request_video_generation_invoke_arn
+  video_generation_lambda_invoke_arn = module.lambda.request_media_generation_invoke_arn
   audio_generation_lambda_invoke_arn = module.lambda.request_audio_generation_invoke_arn
 }
 

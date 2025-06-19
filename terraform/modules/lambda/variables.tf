@@ -25,10 +25,10 @@ variable "request_script_package_path" {
   default     = "lambda_packages/request_script.zip"
 }
 
-variable "request_video_generation_package_path" {
+variable "request_media_generation_package_path" {
   description = "Path to the request video generation Lambda deployment package"
   type        = string
-  default     = "lambda_packages/request_video_generation.zip"
+  default     = "lambda_packages/request_media_generation.zip"
 }
 
 variable "generated_videos_s3_bucket_name" {

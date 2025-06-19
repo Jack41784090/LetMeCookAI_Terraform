@@ -22,3 +22,13 @@ output "generated_video_bucket_arn" {
   description = "ARN of the S3 bucket for generated videos"
   value       = aws_s3_bucket.generated_videos_bucket.arn
 }
+
+output "job_coordination_table_name" {
+  description = "Name of the DynamoDB job coordination table"
+  value       = aws_dynamodb_table.job_coordination.name
+}
+
+output "job_coordination_table_arn" {
+  description = "ARN of the DynamoDB job coordination table"
+  value       = aws_dynamodb_table.job_coordination.arn
+}
