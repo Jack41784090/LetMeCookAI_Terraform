@@ -247,11 +247,14 @@ def compose_single_scene(
 ) -> str:
     """Compose a single scene using FFmpeg"""
     try:
-        output_path = f"/tmp/composed_scene_{scene_index:02d}.mp4"
+        output_path = f"/tmp/composed_scene_{scene_index:02d}.mp4"  # FFmpeg command to compose audio and video
+        # Use FFmpeg from layer if available, fallback to system ffmpeg
+        ffmpeg_path = (
+            "/opt/bin/ffmpeg" if os.path.exists("/opt/bin/ffmpeg") else "ffmpeg"
+        )
 
-        # FFmpeg command to compose audio and video
         cmd = [
-            "ffmpeg",
+            ffmpeg_path,
             "-y",
             "-i",
             video_file["local_path"],  # Video input
@@ -303,11 +306,14 @@ def concatenate_scenes(scene_paths: List[str], job_id: str) -> str:
             for path in scene_paths:
                 f.write(f"file '{path}'\n")
 
-        output_path = f"/tmp/final_video_{job_id}.mp4"
+        output_path = f"/tmp/final_video_{job_id}.mp4"  # FFmpeg concat command
+        # Use FFmpeg from layer if available, fallback to system ffmpeg
+        ffmpeg_path = (
+            "/opt/bin/ffmpeg" if os.path.exists("/opt/bin/ffmpeg") else "ffmpeg"
+        )
 
-        # FFmpeg concat command
         cmd = [
-            "ffmpeg",
+            ffmpeg_path,
             "-y",
             "-f",
             "concat",
