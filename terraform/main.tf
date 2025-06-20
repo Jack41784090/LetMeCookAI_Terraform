@@ -24,6 +24,7 @@ module "iam" {
   tags                       = local.tags
   generated_video_bucket_arn = module.storage.generated_video_bucket_arn
   job_coordination_table_arn = module.storage.job_coordination_table_arn
+  compose_media_function_arn = module.lambda.compose_media_invoke_arn
 }
 
 # Lambda Module - Lambda functions and CloudWatch logs

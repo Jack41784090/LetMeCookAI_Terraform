@@ -23,3 +23,8 @@ variable "job_coordination_table_arn" {
   description = "The DynamoDB table ARN for job coordination"
   type = string
 }
+
+variable "compose_media_function_arn" {
+  description = "ARN of the Lambda function that composes media after requesting"
+  type = string
+}
