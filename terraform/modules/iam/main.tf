@@ -58,6 +58,7 @@ resource "aws_iam_role_policy" "lambda_policy" {
       {
         Effect = "Allow",
         Action = [
+          "s3:GetObject",
           "s3:PutObject",
           "s3:DeleteObject",
           "s3:ListBucket"
@@ -66,10 +67,12 @@ resource "aws_iam_role_policy" "lambda_policy" {
           var.generated_video_bucket_arn,
           "${var.generated_video_bucket_arn}/*"
         ]
-      },      {
+      },
+      {
         Effect = "Allow",
         Action = [
-          "dynamodb:UpdateItem"
+          "dynamodb:UpdateItem",
+          "dynamodb:GetItem"
         ],
         Resource = var.job_coordination_table_arn
       },
