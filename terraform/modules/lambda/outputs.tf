@@ -7,3 +7,8 @@ output "request_media_generation_invoke_arn" {
   description = "Invoke ARN of the request video generation Lambda function"
   value       = aws_lambda_function.request_media_generation.arn
 }
+
+output "compose_media_invoke_arn" {
+  description = "Invoke ARN of the compose media Lambda function"
+  value       = aws_lambda_function.compose_media.invoke_arn
+}
