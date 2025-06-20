@@ -54,7 +54,8 @@ resource "aws_iam_role_policy" "lambda_policy" {
           "sts:GetCallerIdentity"
         ]
         Resource = "*"
-      },      {
+      },
+      {
         Effect = "Allow",
         Action = [
           "s3:PutObject",
@@ -65,6 +66,13 @@ resource "aws_iam_role_policy" "lambda_policy" {
           var.generated_video_bucket_arn,
           "${var.generated_video_bucket_arn}/*"
         ]
+      },
+      {
+        Effect = "Allow",
+        Action = [
+          "dynamodb:UpdateItem",
+        ]
+        Resource = var.job_coordination_table_arn
       }
     ]
   })

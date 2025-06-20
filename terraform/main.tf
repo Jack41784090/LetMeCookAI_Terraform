@@ -23,6 +23,7 @@ module "iam" {
   sqs_queue_arn              = module.storage.sqs_queue_arn
   tags                       = local.tags
   generated_video_bucket_arn = module.storage.generated_video_bucket_arn
+  job_coordination_table_arn = module.storage.job_coordination_table_arn
 }
 
 # Lambda Module - Lambda functions and CloudWatch logs

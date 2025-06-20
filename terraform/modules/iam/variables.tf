@@ -18,3 +18,8 @@ variable "generated_video_bucket_arn" {
   description = "The bucket arn in which holds the generated videos"
   type = string
 }
+
+variable "job_coordination_table_arn" {
+  description = "The DynamoDB table ARN for job coordination"
+  type = string
+}
