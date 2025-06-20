@@ -66,12 +66,11 @@ resource "aws_iam_role_policy" "lambda_policy" {
           var.generated_video_bucket_arn,
           "${var.generated_video_bucket_arn}/*"
         ]
-      },
-      {
+      },      {
         Effect = "Allow",
         Action = [
-          "dynamodb:UpdateItem",
-        ]
+          "dynamodb:UpdateItem"
+        ],
         Resource = var.job_coordination_table_arn
       },
       {
