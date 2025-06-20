@@ -72,13 +72,12 @@ resource "aws_iam_role_policy" "lambda_policy" {
           "dynamodb:UpdateItem"
         ],
         Resource = var.job_coordination_table_arn
-      },
-      {
+      },      {
         Effect = "Allow",
         Action = [
           "lambda:InvokeFunction"
         ],
-        Resource = var.compose_media_function_arn
+        Resource = "arn:aws:lambda:*:*:function:${var.app_name}-*"
       }
     ]
   })
