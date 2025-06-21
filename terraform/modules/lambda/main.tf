@@ -80,12 +80,12 @@ resource "aws_lambda_function" "compose_media" {
   role          = var.lambda_role_arn
   handler       = "compose_media.lambda_handler"
   runtime       = var.lambda_runtime
-  timeout       = var.lambda_timeout * 15 # Extended timeout for video processing  source_code_hash = filebase64sha256(var.compose_media_package_path)
+  timeout       = var.lambda_timeout * 15 # Extended timeout for video processing 
+  source_code_hash = filebase64sha256(var.compose_media_package_path)
   layers = [
     aws_lambda_layer_version.compose_media_layer.arn,
-    "arn:aws:lambda:us-east-2:145266761615:layer:ffmpeg:4"
+    "arn:aws:lambda:us-east-2:252605744489:layer:ffmpeg:1"
   ]
-  source_code_hash = filebase64sha256(var.compose_media_package_path)
 
   environment {
     variables = {
