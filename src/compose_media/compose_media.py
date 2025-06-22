@@ -152,10 +152,12 @@ def compose_media(job_id: str) -> str:
         video_files = download_media_files(job_id, "generated-videos")
 
         if not audio_files or not video_files:
-            raise ValueError("Missing audio or video files")        # Sort files by scene number
+            raise ValueError(
+                "Missing audio or video files"
+            )  # Sort files by scene number
         audio_files.sort(key=lambda x: x["scene_number"])
         video_files.sort(key=lambda x: x["scene_number"])
-        
+
         logger.info(
             f"Found {len(audio_files)} audio files and {len(video_files)} video files"
         )
@@ -230,113 +232,6 @@ def extract_scene_number(filename: str) -> int | None:
         return None
 
 
-def compose_single_scene(
-    audio_file: Dict[str, Any], video_file: Dict[str, Any], scene_index: int
-) -> str:
-    """Compose a single scene using FFmpeg"""
-    try:
-        output_path = f"/tmp/composed_scene_{scene_index:02d}.mp4"  # FFmpeg command to compose audio and video        # Use FFmpeg from layer if available, fallback to system ffmpeg
-        ffmpeg_path = (
-            "/opt/bin/ffmpeg" if os.path.exists("/opt/bin/ffmpeg") else "ffmpeg"
-        )
-
-        cmd = [
-            ffmpeg_path,
-            "-y",
-            "-i",
-            video_file["local_path"],  # Video input
-            "-i",
-            audio_file["local_path"],  # Audio input
-            "-c:v",
-            "libx264",  # Video codec
-            "-c:a",
-            "aac",  # Audio codec
-            "-preset",
-            "ultrafast",  # Faster encoding, less memory usage
-            "-crf",
-            "28",  # Higher compression to reduce file size
-            "-shortest",  # Use shortest duration
-            "-map",
-            "0:v:0",  # Map first video stream
-            "-map",
-            "1:a:0",  # Map first audio stream
-            "-r",
-            "24",  # Lower frame rate to reduce processing
-            "-threads",
-            "1",  # Limit threads to reduce memory usage
-            output_path,
-        ]
-
-        logger.info(f"Composing scene {scene_index} with command: {' '.join(cmd)}")
-
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
-
-        if result.returncode != 0:
-            logger.error(f"FFmpeg error: {result.stderr}")
-            raise RuntimeError(f"FFmpeg failed with return code {result.returncode}")
-
-        if not os.path.exists(output_path):
-            raise RuntimeError(f"Output file was not created: {output_path}")
-
-        logger.info(f"Successfully composed scene {scene_index}")
-        return output_path
-
-    except Exception as e:
-        logger.error(f"Error composing scene {scene_index}: {str(e)}")
-        raise
-
-
-def concatenate_scenes(scene_paths: List[str], job_id: str) -> str:
-    """Concatenate all composed scenes into a single video"""
-    try:
-        # Create file list for FFmpeg concat
-        concat_file = f"/tmp/concat_list_{job_id}.txt"
-        with open(concat_file, "w") as f:
-            for path in scene_paths:
-                f.write(f"file '{path}'\n")
-
-        output_path = f"/tmp/final_video_{job_id}.mp4"  # FFmpeg concat command        # Use FFmpeg from layer if available, fallback to system ffmpeg
-        ffmpeg_path = (
-            "/opt/bin/ffmpeg" if os.path.exists("/opt/bin/ffmpeg") else "ffmpeg"
-        )
-
-        cmd = [
-            ffmpeg_path,
-            "-y",
-            "-f",
-            "concat",
-            "-safe",
-            "0",
-            "-i",
-            concat_file,
-            "-c",
-            "copy",  # Copy streams without re-encoding
-            "-threads",
-            "1",  # Limit threads to reduce memory usage
-            output_path,
-        ]
-
-        logger.info(f"Concatenating scenes with command: {' '.join(cmd)}")
-
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
-
-        if result.returncode != 0:
-            logger.error(f"FFmpeg concat error: {result.stderr}")
-            raise RuntimeError(
-                f"FFmpeg concat failed with return code {result.returncode}"
-            )
-
-        if not os.path.exists(output_path):
-            raise RuntimeError(f"Final video was not created: {output_path}")
-
-        logger.info(f"Successfully concatenated {len(scene_paths)} scenes")
-        return output_path
-
-    except Exception as e:
-        logger.error(f"Error concatenating scenes: {str(e)}")
-        raise
-
-
 def upload_final_video(video_path: str, job_id: str) -> str:
     """Upload final composed video to S3"""
     try:
@@ -375,62 +270,76 @@ def cleanup_temp_files(file_paths: List[str]):
             logger.warning(f"Could not clean up {path}: {str(e)}")
 
 
-def process_scenes_sequentially(audio_files: List[Dict[str, Any]], video_files: List[Dict[str, Any]], job_id: str) -> str:
+def process_scenes_sequentially(
+    audio_files: List[Dict[str, Any]], video_files: List[Dict[str, Any]], job_id: str
+) -> str:
     """Process scenes one at a time and concatenate directly to minimize memory usage"""
     try:
+        logger.info(
+            f"Processing {len(audio_files)} audio files and {len(video_files)} video files"
+        )
+
         if len(audio_files) != len(video_files):
-            raise ValueError(f"Mismatch: {len(audio_files)} audio files vs {len(video_files)} video files")
-        
+            raise ValueError(
+                f"Mismatch: {len(audio_files)} audio files vs {len(video_files)} video files"
+            )
+
         if len(audio_files) == 0:
             raise ValueError("No scenes to process")
-        
+
         if len(audio_files) == 1:
             # Single scene - compose directly to final output
             logger.info("Single scene detected, composing directly to final output")
             final_video_path = f"/tmp/final_video_{job_id}.mp4"
-            compose_single_scene_to_path(audio_files[0], video_files[0], final_video_path)
+            compose_single_scene_to_path(
+                audio_files[0], video_files[0], final_video_path
+            )
             return final_video_path
-        
+
         # Multiple scenes - compose and concatenate sequentially
         logger.info(f"Processing {len(audio_files)} scenes sequentially")
-        
+
         # Create concat file first
         concat_file = f"/tmp/concat_list_{job_id}.txt"
-        
+
         # Process first scene
         scene_0_path = f"/tmp/composed_scene_00.mp4"
         compose_single_scene_to_path(audio_files[0], video_files[0], scene_0_path)
-        
+
         with open(concat_file, "w") as f:
             f.write(f"file '{scene_0_path}'\n")
-        
+
         # Process remaining scenes one by one
         for i in range(1, len(audio_files)):
             logger.info(f"Processing scene {i}/{len(audio_files)-1}")
-            
+
             # Compose current scene
             current_scene_path = f"/tmp/composed_scene_{i:02d}.mp4"
-            compose_single_scene_to_path(audio_files[i], video_files[i], current_scene_path)
-            
+            compose_single_scene_to_path(
+                audio_files[i], video_files[i], current_scene_path
+            )
+
             # Add to concat file
             with open(concat_file, "a") as f:
                 f.write(f"file '{current_scene_path}'\n")
-            
+
             # Clean up previous scene file to save memory (except the first one)
             if i > 1:
                 prev_scene_path = f"/tmp/composed_scene_{i-1:02d}.mp4"
                 cleanup_temp_files([prev_scene_path])
-        
+
         # Now concatenate all scenes
         final_video_path = f"/tmp/final_video_{job_id}.mp4"
         concatenate_from_file(concat_file, final_video_path)
-        
+
         # Clean up remaining scene files
-        scene_files = [f"/tmp/composed_scene_{i:02d}.mp4" for i in range(len(audio_files))]
+        scene_files = [
+            f"/tmp/composed_scene_{i:02d}.mp4" for i in range(len(audio_files))
+        ]
         cleanup_temp_files(scene_files + [concat_file])
-        
+
         return final_video_path
-        
+
     except Exception as e:
         logger.error(f"Error in process_scenes_sequentially: {str(e)}")
         raise
