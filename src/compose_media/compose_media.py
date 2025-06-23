@@ -307,9 +307,7 @@ def process_scenes_sequentially(
         compose_single_scene_to_path(audio_files[0], video_files[0], scene_0_path)
 
         with open(concat_file, "w") as f:
-            f.write(f"file '{scene_0_path}'\n")
-
-        # Process remaining scenes one by one
+            f.write(f"file '{scene_0_path}'\n")        # Process remaining scenes one by one
         for i in range(1, len(audio_files)):
             logger.info(f"Processing scene {i}/{len(audio_files)-1}")
 
@@ -323,10 +321,7 @@ def process_scenes_sequentially(
             with open(concat_file, "a") as f:
                 f.write(f"file '{current_scene_path}'\n")
 
-            # Clean up previous scene file to save memory (except the first one)
-            if i > 1:
-                prev_scene_path = f"/tmp/composed_scene_{i-1:02d}.mp4"
-                cleanup_temp_files([prev_scene_path])
+            # Don't clean up scene files yet - FFmpeg needs them for concatenation
 
         # Now concatenate all scenes
         final_video_path = f"/tmp/final_video_{job_id}.mp4"
@@ -358,27 +353,17 @@ def compose_single_scene_to_path(
         cmd = [
             ffmpeg_path,
             "-y",
-            "-i",
-            video_file["local_path"],  # Video input
-            "-i",
-            audio_file["local_path"],  # Audio input
-            "-c:v",
-            "libx264",  # Video codec
-            "-c:a",
-            "aac",  # Audio codec
-            "-preset",
-            "ultrafast",  # Faster encoding, less CPU/memory usage
-            "-crf",
-            "28",  # Higher compression to reduce file size
+            "-i", video_file["local_path"],  # Video input
+            "-i", audio_file["local_path"],  # Audio input
+            "-c:v", "libx264",  # Video codec
+            "-c:a", "aac",  # Audio codec
+            "-preset", "ultrafast",  # Faster encoding, less CPU/memory usage
+            "-crf", "28",  # Higher compression to reduce file size
             "-shortest",  # Use shortest duration
-            "-map",
-            "0:v:0",  # Map first video stream
-            "-map",
-            "1:a:0",  # Map first audio stream
-            "-r",
-            "24",  # Lower frame rate to reduce processing
-            "-threads",
-            "1",  # Limit threads to reduce memory usage
+            "-map", "0:v:0",  # Map first video stream
+            "-map", "1:a:0",  # Map first audio stream
+            "-r", "24",  # Lower frame rate to reduce processing
+            "-threads", "1",  # Limit threads to reduce memory usage
             output_path,
         ]
 
@@ -411,16 +396,11 @@ def concatenate_from_file(concat_file: str, output_path: str) -> None:
         cmd = [
             ffmpeg_path,
             "-y",
-            "-f",
-            "concat",
-            "-safe",
-            "0",
-            "-i",
-            concat_file,
-            "-c",
-            "copy",  # Copy streams without re-encoding
-            "-threads",
-            "1",  # Limit threads
+            "-f", "concat",
+            "-safe", "0",
+            "-i", concat_file,
+            "-c", "copy",  # Copy streams without re-encoding
+            "-threads", "1",  # Limit threads
             output_path,
         ]
 
