@@ -26,7 +26,7 @@ resource "aws_lambda_function" "request_script_from_deepseek" {
     aws_lambda_layer_version.request_script_from_deepseek_layer.arn
   ]
 
-  timeout = var.lambda_timeout
+  timeout = 60 * 1
 
   environment {
     variables = {
@@ -48,7 +48,7 @@ resource "aws_lambda_function" "request_media_generation" {
   role             = var.lambda_role_arn
   handler          = "request_media_generation.lambda_handler"
   runtime          = var.lambda_runtime
-  timeout          = var.lambda_timeout * 10 # Increased timeout for video generation
+  timeout          = 60 * 15
   source_code_hash = filebase64sha256(var.request_media_generation_package_path)
   layers = [
     aws_lambda_layer_version.request_media_generation.arn
@@ -80,7 +80,8 @@ resource "aws_lambda_function" "compose_media" {
   role          = var.lambda_role_arn
   handler       = "compose_media.lambda_handler"
   runtime       = var.lambda_runtime
-  timeout       = var.lambda_timeout * 15 # Extended timeout for video processing 
+  timeout       = 60 * 15
+  memory_size   = 10240
   source_code_hash = filebase64sha256(var.compose_media_package_path)
   layers = [
     aws_lambda_layer_version.compose_media_layer.arn,
