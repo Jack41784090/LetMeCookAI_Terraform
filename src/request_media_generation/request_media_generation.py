@@ -465,13 +465,28 @@ def call_video_generation_api(
 
         os.environ["FAL_KEY"] = FAL_KEY
 
-        # For testing - replace with actual API call
-        time.sleep(2)
-        result = {
-            "video": {
-                "url": "https://v3.fal.media/files/penguin/qmLZSvOIzTKs6bDFXiEtH_video.mp4"
-            }
-        }
+        # # For testing - replace with actual API call
+        # time.sleep(2)
+        # result = {
+        #     "video": {
+        #         "url": "https://v3.fal.media/files/penguin/qmLZSvOIzTKs6bDFXiEtH_video.mp4"
+        #     }
+        # }
+        
+        def on_queue_update(update):
+            if isinstance(update, fal_client.InProgress):
+                for log in update.logs:
+                    print(log["message"])
+
+        result = fal_client.subscribe(
+            "fal-ai/minimax/hailuo-02/standard/text-to-video",
+            arguments={
+                "prompt": video_request["prompt"], 
+            },
+            with_logs=True,
+            on_queue_update=on_queue_update,
+        )
+        print(result)
 
         if result and "video" in result and "url" in result["video"]:
             video_url = result["video"]["url"]
@@ -525,13 +540,27 @@ def call_audio_generation_api(
 
         os.environ["FAL_KEY"] = FAL_KEY
 
-        # For testing - replace with actual API call
-        time.sleep(1)
-        result = {
-            "audio": {
-                "url": "https://fal-api-audio-uploads.s3.amazonaws.com/166db034-7421-4767-adad-ab7c36a99b75.mp3"
-            }
-        }
+        # # For testing - replace with actual API call
+        # time.sleep(1)
+        # result = {
+        #     "audio": {
+        #         "url": "https://fal-api-audio-uploads.s3.amazonaws.com/166db034-7421-4767-adad-ab7c36a99b75.mp3"
+        #     }
+        # }
+        def on_queue_update(update):
+            if isinstance(update, fal_client.InProgress):
+                for log in update.logs:
+                    print(log["message"])
+
+        result = fal_client.subscribe(
+            "fal-ai/kokoro/hindi",
+            arguments={
+                "prompt": audio_request["prompt"],
+                "voice": "hf_alpha"
+            },
+            with_logs=True,
+            on_queue_update=on_queue_update
+        )
 
         if result and "audio" in result and "url" in result["audio"]:
             audio_url = result["audio"]["url"]
