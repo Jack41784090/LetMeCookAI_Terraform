@@ -87,10 +87,9 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     initialize_job_coordination(
                         job_id, JOB_COORDINATION_TABLE, prompt, role
                     )
-
                 # Generate both video and audio in parallel
-                video_results, audio_results = generate_media_parallel(
-                    scenes, prompt, role, job_id
+                video_results, audio_results = asyncio.run(
+                    generate_media_parallel(scenes, prompt, role, job_id)
                 )
 
                 # Store results
@@ -138,31 +137,25 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         }
 
 
-def generate_media_parallel(
+async def generate_media_parallel(
     scenes: List[Dict[str, Any]], original_prompt: str, role: str, job_id: str
 ) -> tuple:
     """
-    Generate both video and audio in parallel using ThreadPoolExecutor
+    Generate both video and audio in parallel using asyncio
 
     Returns:
         Tuple of (video_results, audio_results)
     """
-    logger.info(f"Starting parallel media generation for job: {job_id}")
+    logger.info(f"Starting async parallel media generation for job: {job_id}")
 
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        # Submit both tasks
-        video_future = executor.submit(
-            generate_videos_for_scenes, scenes, original_prompt, role, job_id
-        )
-        audio_future = executor.submit(
-            generate_audio_for_scenes, scenes, original_prompt, role, job_id
-        )
+    # Start both video and audio generation concurrently
+    video_task = generate_videos_for_scenes(scenes, original_prompt, role, job_id)
+    audio_task = generate_audio_for_scenes(scenes, original_prompt, role, job_id)
 
-        # Wait for both to complete
-        video_results = video_future.result()
-        audio_results = audio_future.result()
+    # Wait for both to complete
+    video_results, audio_results = await asyncio.gather(video_task, audio_task)
 
-    logger.info(f"Completed parallel media generation for job: {job_id}")
+    logger.info(f"Completed async parallel media generation for job: {job_id}")
     return video_results, audio_results
 
 
@@ -272,66 +265,28 @@ def extract_scenes_from_response(response) -> List[Dict[str, Any]]:
     return scenes
 
 
-def generate_videos_for_scenes(
+async def generate_videos_for_scenes(
     scenes: List[Dict[str, Any]], original_prompt: str, role: str, job_id: str
 ) -> List[Dict[str, Any]]:
-    """Generate videos for each scene using external API."""
-    video_results = []
-    logger.info(f"Generating videos for job: {job_id}")
+    """Generate videos for each scene using external API concurrently."""
+    logger.info(f"Generating videos concurrently for job: {job_id}")
 
+    # Create all video generation tasks
+    tasks = []
     for i, scene in enumerate(scenes):
-        try:
-            # Get scene description
-            if "positive_prompt" in scene:
-                scene_description = scene["positive_prompt"]
-                scene_number = scene.get("scene_number", i + 1)
-                duration = scene.get("duration", 10)
-                visual_desc = scene.get("visual_description", "")
-                voiceover = scene.get("voiceover", "")
-            else:
-                scene_description = scene.get("description", "")
-                scene_number = i + 1
-                duration = scene.get("duration", 10)
-                visual_desc = scene_description
-                voiceover = scene.get("voiceover", scene_description)
+        task = generate_single_video(scene, i, job_id)
+        tasks.append(task)
 
-            logger.info(
-                f"Generating video for scene {scene_number}: {visual_desc[:100]}..."
-            )
+    # Run all tasks concurrently
+    video_results = await asyncio.gather(*tasks, return_exceptions=True)
 
-            # Prepare video generation request
-            video_request = {
-                "prompt": scene_description,
-                "aspect_ratio": "9:21",
-                "resolution": "480p",
-                "duration": 5 if duration <= 5 else 10,
-                "camera_fixed": False,
-                "seed": -1,
-            }
-
-            # Make request to external video generation API
-            video_result = call_video_generation_api(
-                video_request, job_id, scene_number
-            )
-
-            video_results.append(
-                {
-                    "scene_index": i,
-                    "scene_number": scene_number,
-                    "scene_description": visual_desc,
-                    "voiceover": voiceover,
-                    "duration": duration,
-                    "video_request": video_request,
-                    "video_result": video_result,
-                    "status": "success" if video_result.get("success") else "failed",
-                }
-            )
-
-            time.sleep(2)  # Rate limiting
-
-        except Exception as e:
-            logger.error(f"Error generating video for scene {i+1}: {str(e)}")
-            video_results.append(
+    # Process results and handle exceptions
+    processed_results = []
+    for i, result in enumerate(video_results):
+        if isinstance(result, Exception):
+            logger.error(f"Error generating video for scene {i+1}: {str(result)}")
+            scene = scenes[i]
+            processed_results.append(
                 {
                     "scene_index": i,
                     "scene_number": scene.get("scene_number", i + 1),
@@ -342,101 +297,102 @@ def generate_videos_for_scenes(
                     "duration": scene.get("duration", 10),
                     "video_result": None,
                     "status": "failed",
-                    "error": str(e),
+                    "error": str(result),
                 }
             )
+        else:
+            processed_results.append(result)
 
-    return video_results
+    return processed_results
 
 
-def generate_audio_for_scenes(
+async def generate_single_video(
+    scene: Dict[str, Any], scene_index: int, job_id: str
+) -> Dict[str, Any]:
+    """Generate a single video asynchronously."""
+    try:
+        # Get scene description
+        if "positive_prompt" in scene:
+            scene_description = scene["positive_prompt"]
+            scene_number = scene.get("scene_number", scene_index + 1)
+            duration = scene.get("duration", 10)
+            visual_desc = scene.get("visual_description", "")
+            voiceover = scene.get("voiceover", "")
+        else:
+            scene_description = scene.get("description", "")
+            scene_number = scene_index + 1
+            duration = scene.get("duration", 10)
+            visual_desc = scene_description
+            voiceover = scene.get("voiceover", scene_description)
+
+        logger.info(
+            f"Generating video for scene {scene_number}: {visual_desc[:100]}..."
+        )
+
+        # Prepare video generation request
+        video_request = {
+            "prompt": scene_description,
+            "aspect_ratio": "9:21",
+            "resolution": "480p",
+            "duration": 5 if duration <= 5 else 10,
+            "camera_fixed": False,
+            "seed": -1,
+        }
+
+        # Make async request to external video generation API
+        video_result = await call_video_generation_api_async(
+            video_request, job_id, scene_number
+        )
+
+        return {
+            "scene_index": scene_index,
+            "scene_number": scene_number,
+            "scene_description": visual_desc,
+            "voiceover": voiceover,
+            "duration": duration,
+            "video_request": video_request,
+            "video_result": video_result,
+            "status": "success" if video_result.get("success") else "failed",
+        }
+
+    except Exception as e:
+        logger.error(f"Error generating video for scene {scene_index+1}: {str(e)}")
+        return {
+            "scene_index": scene_index,
+            "scene_number": scene.get("scene_number", scene_index + 1),
+            "scene_description": scene.get(
+                "visual_description", scene.get("description", "")
+            ),
+            "voiceover": scene.get("voiceover", ""),
+            "duration": scene.get("duration", 10),
+            "video_result": None,
+            "status": "failed",
+            "error": str(e),
+        }
+
+
+async def generate_audio_for_scenes(
     scenes: List[Dict[str, Any]], original_prompt: str, role: str, job_id: str
 ) -> List[Dict[str, Any]]:
-    """Generate audio for each scene using external API."""
-    audio_results = []
-    logger.info(f"Generating audio for job: {job_id}")
+    """Generate audio for each scene using external API concurrently."""
+    logger.info(f"Generating audio concurrently for job: {job_id}")
 
+    # Create all audio generation tasks
+    tasks = []
     for i, scene in enumerate(scenes):
-        try:
-            # Get voiceover text
-            if "voiceover" in scene:
-                voiceover_text = scene["voiceover"]
-                scene_number = scene.get("scene_number", i + 1)
-                duration = scene.get("duration", 10)
-                visual_desc = scene.get("visual_description", "")
-            else:
-                voiceover_text = scene.get("description", "")
-                scene_number = i + 1
-                duration = scene.get("duration", 10)
-                visual_desc = voiceover_text
+        task = generate_single_audio(scene, i, job_id)
+        tasks.append(task)
 
-            logger.info(
-                f"Generating audio for scene {scene_number}: {voiceover_text[:100]}..."
-            )
+    # Run all tasks concurrently
+    audio_results = await asyncio.gather(*tasks, return_exceptions=True)
 
-            # Skip if no voiceover text
-            if not voiceover_text.strip():
-                logger.warning(f"No voiceover text for scene {scene_number}, skipping")
-                audio_results.append(
-                    {
-                        "scene_index": i,
-                        "scene_number": scene_number,
-                        "voiceover_text": "",
-                        "visual_description": visual_desc,
-                        "duration": duration,
-                        "audio_result": None,
-                        "status": "skipped",
-                        "message": "No voiceover text provided",
-                    }
-                )
-                continue
-
-            # Prepare audio generation request
-            audio_request = {
-                "prompt": voiceover_text,
-                "voice": "hf_alpha",
-                "speed": 1.0,
-            }
-
-            # Voice mapping from master context
-            if "master_prompt_context" in scene:
-                master_context = scene["master_prompt_context"]
-                if master_context.get("voice_style"):
-                    voice_mapping = {
-                        "female_alpha": "hf_alpha",
-                        "female_beta": "hf_beta",
-                        "male_omega": "hm_omega",
-                        "male_psi": "hm_psi",
-                    }
-                    audio_request["voice"] = voice_mapping.get(
-                        master_context["voice_style"], "hf_alpha"
-                    )
-                if master_context.get("speech_speed"):
-                    audio_request["speed"] = master_context["speech_speed"]
-
-            # Make request to external audio generation API
-            audio_result = call_audio_generation_api(
-                audio_request, job_id, scene_number
-            )
-
-            audio_results.append(
-                {
-                    "scene_index": i,
-                    "scene_number": scene_number,
-                    "voiceover_text": voiceover_text,
-                    "visual_description": visual_desc,
-                    "duration": duration,
-                    "audio_request": audio_request,
-                    "audio_result": audio_result,
-                    "status": "success" if audio_result.get("success") else "failed",
-                }
-            )
-
-            time.sleep(1)  # Rate limiting
-
-        except Exception as e:
-            logger.error(f"Error generating audio for scene {i+1}: {str(e)}")
-            audio_results.append(
+    # Process results and handle exceptions
+    processed_results = []
+    for i, result in enumerate(audio_results):
+        if isinstance(result, Exception):
+            logger.error(f"Error generating audio for scene {i+1}: {str(result)}")
+            scene = scenes[i]
+            processed_results.append(
                 {
                     "scene_index": i,
                     "scene_number": scene.get("scene_number", i + 1),
@@ -447,17 +403,107 @@ def generate_audio_for_scenes(
                     "duration": scene.get("duration", 10),
                     "audio_result": None,
                     "status": "failed",
-                    "error": str(e),
+                    "error": str(result),
                 }
             )
+        else:
+            processed_results.append(result)
 
-    return audio_results
+    return processed_results
 
 
-def call_video_generation_api(
+async def generate_single_audio(
+    scene: Dict[str, Any], scene_index: int, job_id: str
+) -> Dict[str, Any]:
+    """Generate a single audio track asynchronously."""
+    try:
+        # Get voiceover text
+        if "voiceover" in scene:
+            voiceover_text = scene["voiceover"]
+            scene_number = scene.get("scene_number", scene_index + 1)
+            duration = scene.get("duration", 10)
+            visual_desc = scene.get("visual_description", "")
+        else:
+            voiceover_text = scene.get("description", "")
+            scene_number = scene_index + 1
+            duration = scene.get("duration", 10)
+            visual_desc = voiceover_text
+
+        logger.info(
+            f"Generating audio for scene {scene_number}: {voiceover_text[:100]}..."
+        )
+
+        # Skip if no voiceover text
+        if not voiceover_text.strip():
+            logger.warning(f"No voiceover text for scene {scene_number}, skipping")
+            return {
+                "scene_index": scene_index,
+                "scene_number": scene_number,
+                "voiceover_text": "",
+                "visual_description": visual_desc,
+                "duration": duration,
+                "audio_result": None,
+                "status": "skipped",
+                "message": "No voiceover text provided",
+            }
+
+        # Prepare audio generation request
+        audio_request = {
+            "prompt": voiceover_text,
+            "voice": "hf_alpha",
+            "speed": 1.0,
+        }
+
+        # Voice mapping from master context
+        if "master_prompt_context" in scene:
+            master_context = scene["master_prompt_context"]
+            if master_context.get("voice_style"):
+                voice_mapping = {
+                    "female_alpha": "hf_alpha",
+                    "female_beta": "hf_beta",
+                    "male_omega": "hm_omega",
+                    "male_psi": "hm_psi",
+                }
+                audio_request["voice"] = voice_mapping.get(
+                    master_context["voice_style"], "hf_alpha"
+                )
+            if master_context.get("speech_speed"):
+                audio_request["speed"] = master_context["speech_speed"]
+
+        # Make async request to external audio generation API
+        audio_result = await call_audio_generation_api_async(
+            audio_request, job_id, scene_number
+        )
+
+        return {
+            "scene_index": scene_index,
+            "scene_number": scene_number,
+            "voiceover_text": voiceover_text,
+            "visual_description": visual_desc,
+            "duration": duration,
+            "audio_request": audio_request,
+            "audio_result": audio_result,
+            "status": "success" if audio_result.get("success") else "failed",
+        }
+
+    except Exception as e:
+        logger.error(f"Error generating audio for scene {scene_index+1}: {str(e)}")
+        return {
+            "scene_index": scene_index,
+            "scene_number": scene.get("scene_number", scene_index + 1),
+            "voiceover_text": scene.get("voiceover", scene.get("description", "")),
+            "visual_description": scene.get("visual_description", ""),
+            "duration": scene.get("duration", 10),
+            "audio_result": None,
+            "status": "failed",
+            "error": str(e),
+        }
+
+
+async def call_video_generation_api_async(
     video_request: Dict[str, Any], job_id: str, scene_number: int
 ) -> Dict[str, Any]:
-    """Call video generation API"""
+    """Call video generation API asynchronously"""
     try:
         if not FAL_KEY:
             logger.error("FAL_KEY environment variable not set")
@@ -465,28 +511,29 @@ def call_video_generation_api(
 
         os.environ["FAL_KEY"] = FAL_KEY
 
-        # # For testing - replace with actual API call
-        # time.sleep(2)
-        # result = {
-        #     "video": {
-        #         "url": "https://v3.fal.media/files/penguin/qmLZSvOIzTKs6bDFXiEtH_video.mp4"
-        #     }
-        # }
-        
-        def on_queue_update(update):
-            if isinstance(update, fal_client.InProgress):
-                for log in update.logs:
-                    print(log["message"])
-
-        result = fal_client.subscribe(
-            "fal-ai/minimax/hailuo-02/standard/text-to-video",
+        # Submit async request
+        handler = await fal_client.submit_async(
+            "fal-ai/bytedance/seedance/v1/pro/text-to-video",
             arguments={
-                "prompt": video_request["prompt"], 
+                "prompt": video_request["prompt"],
+                "aspect_ratio": "9:16",
+                "resolution": "480p",
+                "duration": "5",
+                "camera_fixed": False,
             },
-            with_logs=True,
-            on_queue_update=on_queue_update,
         )
-        print(result)
+
+        # Process events with logs
+        async for event in handler.iter_events(with_logs=True):
+            if hasattr(event, "logs"):
+                for log in event.logs:
+                    logger.info(
+                        f"Scene {scene_number} video generation: {log.get('message', str(log))}"
+                    )
+
+        # Get final result
+        result = await handler.get()
+        logger.info(f"Scene {scene_number} video generation completed: {result}")
 
         if result and "video" in result and "url" in result["video"]:
             video_url = result["video"]["url"]
@@ -525,14 +572,16 @@ def call_video_generation_api(
             return {"error": "No video URL in response", "details": result}
 
     except Exception as e:
-        logger.error(f"Error calling video API: {str(e)}")
+        logger.error(
+            f"Error calling async video API for scene {scene_number}: {str(e)}"
+        )
         return {"error": "API call failed", "details": str(e)}
 
 
-def call_audio_generation_api(
+async def call_audio_generation_api_async(
     audio_request: Dict[str, Any], job_id: str, scene_number: int
 ) -> Dict[str, Any]:
-    """Call audio generation API"""
+    """Call audio generation API asynchronously"""
     try:
         if not FAL_KEY:
             logger.error("FAL_KEY environment variable not set")
@@ -540,27 +589,26 @@ def call_audio_generation_api(
 
         os.environ["FAL_KEY"] = FAL_KEY
 
-        # # For testing - replace with actual API call
-        # time.sleep(1)
-        # result = {
-        #     "audio": {
-        #         "url": "https://fal-api-audio-uploads.s3.amazonaws.com/166db034-7421-4767-adad-ab7c36a99b75.mp3"
-        #     }
-        # }
-        def on_queue_update(update):
-            if isinstance(update, fal_client.InProgress):
-                for log in update.logs:
-                    print(log["message"])
-
-        result = fal_client.subscribe(
+        # Submit async request
+        handler = await fal_client.submit_async(
             "fal-ai/kokoro/hindi",
             arguments={
                 "prompt": audio_request["prompt"],
-                "voice": "hf_alpha"
+                "voice": audio_request["voice"],
             },
-            with_logs=True,
-            on_queue_update=on_queue_update
         )
+
+        # Process events with logs
+        async for event in handler.iter_events(with_logs=True):
+            if hasattr(event, "logs"):
+                for log in event.logs:
+                    logger.info(
+                        f"Scene {scene_number} audio generation: {log.get('message', str(log))}"
+                    )
+
+        # Get final result
+        result = await handler.get()
+        logger.info(f"Scene {scene_number} audio generation completed: {result}")
 
         if result and "audio" in result and "url" in result["audio"]:
             audio_url = result["audio"]["url"]
@@ -601,7 +649,9 @@ def call_audio_generation_api(
             return {"error": "No audio URL in response", "details": result}
 
     except Exception as e:
-        logger.error(f"Error calling audio API: {str(e)}")
+        logger.error(
+            f"Error calling async audio API for scene {scene_number}: {str(e)}"
+        )
         return {"error": "API call failed", "details": str(e)}
 
 
