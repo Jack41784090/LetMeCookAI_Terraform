@@ -153,7 +153,7 @@ async def generate_media_parallel(
 
     # Start both video and audio generation concurrently
     video_task = generate_videos_for_scenes(scenes, original_prompt, role, job_id, type)
-    audio_task = generate_audio_for_scenes(scenes, original_prompt, role, job_id, type)
+    audio_task = generate_audio_for_scenes(scenes, original_prompt, role, job_id) if type != "short" else asyncio.sleep(0)
 
     # Wait for both to complete
     video_results, audio_results = await asyncio.gather(video_task, audio_task)
