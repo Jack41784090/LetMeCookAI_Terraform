@@ -175,7 +175,19 @@ def extract_scenes_from_response(response) -> List[Dict[str, Any]]:
         if isinstance(response, dict):
             parsed_response = response
         else:
-            parsed_response = json.loads(response)
+            # Clean the response string to remove markdown code blocks
+            cleaned_response = response.strip()
+            
+            # Remove ```json and ``` markers if present
+            if "```json" in cleaned_response:
+                cleaned_response = cleaned_response.replace("```json", "")
+            if "```" in cleaned_response:
+                cleaned_response = cleaned_response.replace("```", "")
+                
+            cleaned_response = cleaned_response.strip()
+            logger.info(f"Cleaned response for JSON parsing: {cleaned_response[:200]}...")
+            
+            parsed_response = json.loads(cleaned_response)
 
         # Handle structured video script format
         if isinstance(parsed_response, dict) and "scenes" in parsed_response:
