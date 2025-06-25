@@ -26,7 +26,7 @@ resource "aws_lambda_function" "request_script_from_deepseek" {
     aws_lambda_layer_version.request_script_from_deepseek_layer.arn
   ]
 
-  timeout = 60 * 1
+  timeout = 60 * 3
 
   environment {
     variables = {
