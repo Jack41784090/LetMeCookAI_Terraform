@@ -14,9 +14,11 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             body = json.loads(event['body']) if isinstance(event['body'], str) else event['body']
             prompt = body.get('prompt')
             role = body.get('role')
+            type = body.get('type')
         else:
             prompt = event.get('prompt')
             role = event.get('role')
+            type = event.get('type')
     except (json.JSONDecodeError, KeyError) as e:
         return {
             "statusCode": 400,
@@ -40,10 +42,17 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 "error": "Role is required"
             })
         }
-    
-        
+    if not type:
+        return {
+            "statusCode": 400,
+            "body": json.dumps({
+                "error": "Type is required"
+            })
+        }
+
     print(f"Received prompt: {prompt}")
     print(f"Received role: {role}")
+    print(f"Received type: {type}")
 
     client = OpenAI(
         base_url="https://api.deepseek.com",
@@ -78,7 +87,8 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             MessageBody=json.dumps({
                 "prompt": prompt,
                 "role": role,
-                "response": message_content
+                "response": message_content,
+                "type": type,
             }),
         )
     except Exception as e:

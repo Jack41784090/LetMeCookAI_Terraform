@@ -65,8 +65,9 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 prompt = message_body.get("prompt")
                 role = message_body.get("role")
                 response = message_body.get("response")
+                type = message_body.get("type")
 
-                if not all([prompt, role, response]):
+                if not all([prompt, role, response, type]):
                     logger.error("Missing required fields in message")
                     failed_count += 1
                     continue
@@ -87,15 +88,17 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     initialize_job_coordination(
                         job_id, JOB_COORDINATION_TABLE, prompt, role
                     )
+
                 # Generate both video and audio in parallel
                 video_results, audio_results = asyncio.run(
-                    generate_media_parallel(scenes, prompt, role, job_id)
+                    generate_media_parallel(scenes, prompt, role, job_id, type)
                 )
 
                 # Store results
                 store_combined_results(
                     video_results, audio_results, prompt, role, response, job_id
                 )
+
                 # Update job coordination status to complete and trigger composition
                 if JOB_COORDINATION_TABLE:
                     update_job_coordination_status(
@@ -138,7 +141,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
 
 async def generate_media_parallel(
-    scenes: List[Dict[str, Any]], original_prompt: str, role: str, job_id: str
+    scenes: List[Dict[str, Any]], original_prompt: str, role: str, job_id: str, type: str
 ) -> tuple:
     """
     Generate both video and audio in parallel using asyncio
@@ -149,8 +152,8 @@ async def generate_media_parallel(
     logger.info(f"Starting async parallel media generation for job: {job_id}")
 
     # Start both video and audio generation concurrently
-    video_task = generate_videos_for_scenes(scenes, original_prompt, role, job_id)
-    audio_task = generate_audio_for_scenes(scenes, original_prompt, role, job_id)
+    video_task = generate_videos_for_scenes(scenes, original_prompt, role, job_id, type)
+    audio_task = generate_audio_for_scenes(scenes, original_prompt, role, job_id, type)
 
     # Wait for both to complete
     video_results, audio_results = await asyncio.gather(video_task, audio_task)
@@ -266,7 +269,7 @@ def extract_scenes_from_response(response) -> List[Dict[str, Any]]:
 
 
 async def generate_videos_for_scenes(
-    scenes: List[Dict[str, Any]], original_prompt: str, role: str, job_id: str
+    scenes: List[Dict[str, Any]], original_prompt: str, role: str, job_id: str, type: str
 ) -> List[Dict[str, Any]]:
     """Generate videos for each scene using external API concurrently."""
     logger.info(f"Generating videos concurrently for job: {job_id}")
@@ -274,7 +277,7 @@ async def generate_videos_for_scenes(
     # Create all video generation tasks
     tasks = []
     for i, scene in enumerate(scenes):
-        task = generate_single_video(scene, i, job_id)
+        task = generate_single_video(scene, i, job_id, type)
         tasks.append(task)
 
     # Run all tasks concurrently
@@ -306,38 +309,44 @@ async def generate_videos_for_scenes(
     return processed_results
 
 
+def get_video_request(scene: Dict[str, Any], type: str) -> Dict[str, Any]:
+    """Prepare video generation request."""
+
+    scene_description = (
+        scene.get("master_prompt_context", {}).get("positive_prefix", "")
+        + " "
+        + scene.get("positive_prompt", scene.get("visual_description", ""))
+    )
+    return {
+        "model": "fal-ai/bytedance/seedance/v1/pro/text-to-video",
+        "prompt": scene_description,
+        "aspect_ratio": "9:16",
+        "resolution": "480p",
+        "duration": scene.get("duration", 5),
+        "camera_fixed": False,
+        "seed": -1,
+    } if type == "short" else {
+        "model": "fal-ai/minimax/hailuo-02/standard/text-to-video",
+        "prompt": scene_description,
+    }
+
 async def generate_single_video(
-    scene: Dict[str, Any], scene_index: int, job_id: str
+    scene: Dict[str, Any], scene_index: int, job_id: str, type: str
 ) -> Dict[str, Any]:
     """Generate a single video asynchronously."""
     try:
         # Get scene description
-        if "positive_prompt" in scene:
-            scene_description = scene["positive_prompt"]
-            scene_number = scene.get("scene_number", scene_index + 1)
-            duration = scene.get("duration", 10)
-            visual_desc = scene.get("visual_description", "")
-            voiceover = scene.get("voiceover", "")
-        else:
-            scene_description = scene.get("description", "")
-            scene_number = scene_index + 1
-            duration = scene.get("duration", 10)
-            visual_desc = scene_description
-            voiceover = scene.get("voiceover", scene_description)
+        scene_number = scene.get("scene_number", scene_index + 1)
+        visual_desc = scene.get("visual_description", "")
+        voiceover = scene.get("voiceover", "")
 
         logger.info(
             f"Generating video for scene {scene_number}: {visual_desc[:100]}..."
         )
 
         # Prepare video generation request
-        video_request = {
-            "prompt": scene_description,
-            "aspect_ratio": "9:21",
-            "resolution": "480p",
-            "duration": 5 if duration <= 5 else 10,
-            "camera_fixed": False,
-            "seed": -1,
-        }
+        video_request = get_video_request(scene, type)
+
 
         # Make async request to external video generation API
         video_result = await call_video_generation_api_async(
@@ -349,7 +358,7 @@ async def generate_single_video(
             "scene_number": scene_number,
             "scene_description": visual_desc,
             "voiceover": voiceover,
-            "duration": duration,
+            "duration": scene.get("duration"),
             "video_request": video_request,
             "video_result": video_result,
             "status": "success" if video_result.get("success") else "failed",
@@ -456,7 +465,7 @@ async def generate_single_audio(
 
         # Voice mapping from master context
         if "master_prompt_context" in scene:
-            master_context = scene["master_prompt_context"]
+            master_context = scene["master_prompt_context"][""]
             if master_context.get("voice_style"):
                 voice_mapping = {
                     "female_alpha": "hf_alpha",
@@ -511,16 +520,22 @@ async def call_video_generation_api_async(
 
         os.environ["FAL_KEY"] = FAL_KEY
 
+        if not video_request.get("prompt"):
+            logger.error(f"No prompt provided for scene {scene_number}")
+            return {"error": "No prompt provided for video generation"}
+
+        arguments = {
+            "prompt": video_request.get("prompt"),
+            "aspect_ratio": video_request.get("aspect_ratio", "9:16"),
+            "resolution": video_request.get("resolution", "480p"),
+            "duration": video_request.get("duration", 5),
+            "camera_fixed": video_request.get("camera_fixed", False),
+        }
+
         # Submit async request
         handler = await fal_client.submit_async(
-            "fal-ai/bytedance/seedance/v1/pro/text-to-video",
-            arguments={
-                "prompt": video_request["prompt"],
-                "aspect_ratio": "9:16",
-                "resolution": "480p",
-                "duration": "5",
-                "camera_fixed": False,
-            },
+            video_request["model"],
+            arguments=arguments,
         )
 
         # Process events with logs
