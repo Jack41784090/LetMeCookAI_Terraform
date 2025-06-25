@@ -57,6 +57,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         # Process each record
         for record in records_to_process:
             job_id = None  # Initialize job_id for error handling
+            video_type = None  # Initialize video_type for error handling
             try:
                 # Parse the SQS message body
                 message_body = json.loads(record["body"])
@@ -65,9 +66,9 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 prompt = message_body.get("prompt")
                 role = message_body.get("role")
                 response = message_body.get("response")
-                type = message_body.get("type")
+                video_type = message_body.get("type")
 
-                if not all([prompt, role, response, type]):
+                if not all([prompt, role, response, video_type]):
                     logger.error("Missing required fields in message")
                     failed_count += 1
                     continue
@@ -91,7 +92,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
                 # Generate both video and audio in parallel
                 video_results, audio_results = asyncio.run(
-                    generate_media_parallel(scenes, prompt, role, job_id, type)
+                    generate_media_parallel(scenes, prompt, role, job_id, video_type)
                 )
 
                 # Store results
@@ -102,7 +103,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 # Update job coordination status to complete and trigger composition
                 if JOB_COORDINATION_TABLE:
                     update_job_coordination_status(
-                        job_id, "video_audio", "complete", JOB_COORDINATION_TABLE
+                        job_id, "video_audio", "complete", JOB_COORDINATION_TABLE, video_type
                     )
 
                 processed_count += 1
@@ -114,7 +115,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 try:
                     if job_id and JOB_COORDINATION_TABLE:
                         update_job_coordination_status(
-                            job_id, "video_audio", "failed", JOB_COORDINATION_TABLE
+                            job_id, "video_audio", "failed", JOB_COORDINATION_TABLE, video_type
                         )
                 except:
                     pass  # Don't fail on coordination update errors
@@ -141,7 +142,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
 
 async def generate_media_parallel(
-    scenes: List[Dict[str, Any]], original_prompt: str, role: str, job_id: str, type: str
+    scenes: List[Dict[str, Any]], original_prompt: str, role: str, job_id: str, video_type: str
 ) -> tuple:
     """
     Generate both video and audio in parallel using asyncio
@@ -152,8 +153,8 @@ async def generate_media_parallel(
     logger.info(f"Starting async parallel media generation for job: {job_id}")
 
     # Start both video and audio generation concurrently
-    video_task = generate_videos_for_scenes(scenes, original_prompt, role, job_id, type)
-    audio_task = generate_audio_for_scenes(scenes, original_prompt, role, job_id) if type != "short" else asyncio.sleep(0)
+    video_task = generate_videos_for_scenes(scenes, original_prompt, role, job_id, video_type)
+    audio_task = generate_audio_for_scenes(scenes, original_prompt, role, job_id) if video_type != "short" else asyncio.sleep(0)
 
     # Wait for both to complete
     video_results, audio_results = await asyncio.gather(video_task, audio_task)
@@ -269,7 +270,7 @@ def extract_scenes_from_response(response) -> List[Dict[str, Any]]:
 
 
 async def generate_videos_for_scenes(
-    scenes: List[Dict[str, Any]], original_prompt: str, role: str, job_id: str, type: str
+    scenes: List[Dict[str, Any]], original_prompt: str, role: str, job_id: str, video_type: str
 ) -> List[Dict[str, Any]]:
     """Generate videos for each scene using external API concurrently."""
     logger.info(f"Generating videos concurrently for job: {job_id}")
@@ -277,7 +278,7 @@ async def generate_videos_for_scenes(
     # Create all video generation tasks
     tasks = []
     for i, scene in enumerate(scenes):
-        task = generate_single_video(scene, i, job_id, type)
+        task = generate_single_video(scene, i, job_id, video_type)
         tasks.append(task)
 
     # Run all tasks concurrently
@@ -309,7 +310,7 @@ async def generate_videos_for_scenes(
     return processed_results
 
 
-def get_video_request(scene: Dict[str, Any], type: str) -> Dict[str, Any]:
+def get_video_request(scene: Dict[str, Any], video_type: str) -> Dict[str, Any]:
     """Prepare video generation request."""
 
     scene_description = (
@@ -325,13 +326,13 @@ def get_video_request(scene: Dict[str, Any], type: str) -> Dict[str, Any]:
         "duration": scene.get("duration", 5),
         "camera_fixed": False,
         "seed": -1,
-    } if type == "short" else {
+    } if video_type == "short" else {
         "model": "fal-ai/minimax/hailuo-02/standard/text-to-video",
         "prompt": scene_description,
     }
 
 async def generate_single_video(
-    scene: Dict[str, Any], scene_index: int, job_id: str, type: str
+    scene: Dict[str, Any], scene_index: int, job_id: str, video_type: str
 ) -> Dict[str, Any]:
     """Generate a single video asynchronously."""
     try:
@@ -345,7 +346,7 @@ async def generate_single_video(
         )
 
         # Prepare video generation request
-        video_request = get_video_request(scene, type)
+        video_request = get_video_request(scene, video_type)
 
 
         # Make async request to external video generation API
@@ -838,9 +839,9 @@ def initialize_job_coordination(
 
 
 def update_job_coordination_status(
-    job_id: str, component: str, status: str, table_name: str
+    job_id: str, component: str, status: str, table_name: str, video_type: str | None = None
 ) -> None:
-    """Update job coordination status and trigger composition if ready"""
+    """Update job coordination status and trigger composition or direct upload if ready"""
     try:
         if not table_name:
             logger.warning("No coordination table specified")
@@ -861,28 +862,53 @@ def update_job_coordination_status(
 
         logger.info(
             f"Updated {component}_status = {status} for job {job_id}"
-        )  # If video_audio is complete, trigger composition
+        )
+        
         if component == "video_audio" and status == "complete":
-            logger.info(
-                f"Both video and audio ready for job {job_id}, triggering composition"
-            )
-
-            try:
-                compose_function_name = os.environ.get("COMPOSE_FUNCTION_NAME")
-                if not compose_function_name:
-                    logger.error("COMPOSE_FUNCTION_NAME environment variable not set")
-                    return
-
-                lambda_client.invoke(
-                    FunctionName=compose_function_name,
-                    InvocationType="Event",
-                    Payload=json.dumps({"job_id": job_id}),
+            # For shorts, skip composition and trigger direct YouTube upload
+            if video_type == "short":
+                logger.info(
+                    f"Shorts video ready for job {job_id}, triggering direct YouTube upload"
                 )
-                logger.info(f"Successfully triggered composition for job {job_id}")
-            except Exception as e:
-                logger.error(
-                    f"Failed to trigger composition for job {job_id}: {str(e)}"
+                
+                try:
+                    youtube_upload_function_name = os.environ.get("YOUTUBE_UPLOAD_FUNCTION_NAME")
+                    if not youtube_upload_function_name:
+                        logger.error("YOUTUBE_UPLOAD_FUNCTION_NAME environment variable not set")
+                        return
+
+                    lambda_client.invoke(
+                        FunctionName=youtube_upload_function_name,
+                        InvocationType="Event",
+                        Payload=json.dumps({"job_id": job_id, "type": "short"}),
+                    )
+                    logger.info(f"Successfully triggered YouTube upload for shorts job {job_id}")
+                except Exception as e:
+                    logger.error(
+                        f"Failed to trigger YouTube upload for shorts job {job_id}: {str(e)}"
+                    )
+            else:
+                # For regular videos, trigger composition
+                logger.info(
+                    f"Both video and audio ready for job {job_id}, triggering composition"
                 )
+
+                try:
+                    compose_function_name = os.environ.get("COMPOSE_FUNCTION_NAME")
+                    if not compose_function_name:
+                        logger.error("COMPOSE_FUNCTION_NAME environment variable not set")
+                        return
+
+                    lambda_client.invoke(
+                        FunctionName=compose_function_name,
+                        InvocationType="Event",
+                        Payload=json.dumps({"job_id": job_id}),
+                    )
+                    logger.info(f"Successfully triggered composition for job {job_id}")
+                except Exception as e:
+                    logger.error(
+                        f"Failed to trigger composition for job {job_id}: {str(e)}"
+                    )
 
     except Exception as e:
         logger.error(f"Error updating job coordination status: {str(e)}")
