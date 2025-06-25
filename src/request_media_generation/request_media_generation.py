@@ -170,8 +170,6 @@ async def generate_media_parallel(
 
 def extract_scenes_from_response(response) -> List[Dict[str, Any]]:
     """Extract scene descriptions from the AI response."""
-    scenes = []
-
     try:
         # Parse the JSON response from the AI
         if isinstance(response, dict):
@@ -182,6 +180,7 @@ def extract_scenes_from_response(response) -> List[Dict[str, Any]]:
         # Handle structured video script format
         if isinstance(parsed_response, dict) and "scenes" in parsed_response:
             video_scenes = parsed_response["scenes"]
+            scenes = []
             for scene in video_scenes:
                 scene_data = {
                     "scene_number": scene.get("scene_number", 1),
@@ -204,74 +203,16 @@ def extract_scenes_from_response(response) -> List[Dict[str, Any]]:
                 f"Extracted {len(scenes)} structured scenes from video script JSON"
             )
             return scenes
+        else:
+            raise ValueError("Response does not contain 'scenes' key in expected format")
 
-        # Handle simple list/dict formats
-        elif isinstance(parsed_response, list):
-            return [
-                {"description": scene, "voiceover": scene, "duration": 10}
-                for scene in parsed_response
-            ]
-        elif isinstance(parsed_response, dict):
-            for key, value in parsed_response.items():
-                if "scene" in key.lower() and isinstance(value, list):
-                    return [
-                        {"description": scene, "voiceover": scene, "duration": 10}
-                        for scene in value
-                    ]
-
-    except json.JSONDecodeError:
-        logger.warning("Response is not valid JSON, attempting text parsing")
-
-        if isinstance(response, str):
-            # Text parsing fallback
-            scene_patterns = [
-                r"Scene \d+[:\-]\s*(.+?)(?=Scene \d+|$)",
-                r"\d+\.\s*(.+?)(?=\d+\.|$)",
-                r"- (.+?)(?=\n-|$)",
-            ]
-
-            for pattern in scene_patterns:
-                matches = re.findall(pattern, response, re.MULTILINE | re.DOTALL)
-                if matches:
-                    scenes = [
-                        {
-                            "description": match.strip(),
-                            "voiceover": match.strip(),
-                            "duration": 10,
-                        }
-                        for match in matches
-                        if match.strip()
-                    ]
-                    break
-
-            if not scenes:
-                paragraphs = [p.strip() for p in response.split("\n\n") if p.strip()]
-                if len(paragraphs) > 1:
-                    scenes = [
-                        {"description": para, "voiceover": para, "duration": 10}
-                        for para in paragraphs
-                    ]
-                else:
-                    sentences = [
-                        s.strip()
-                        for s in response.split(".")
-                        if s.strip() and len(s.strip()) > 20
-                    ]
-                    scenes = [
-                        {
-                            "description": sentence + ".",
-                            "voiceover": sentence + ".",
-                            "duration": 8,
-                        }
-                        for sentence in sentences[:5]
-                    ]
-
-            logger.info(f"Extracted {len(scenes)} scenes from text parsing")
+    except json.JSONDecodeError as e:
+        logger.error(f"Response is not valid JSON: {str(e)}")
+        raise ValueError(f"Invalid JSON response: {str(e)}")
 
     except Exception as e:
         logger.error(f"Error extracting scenes: {str(e)}")
-
-    return scenes
+        raise ValueError(f"Failed to extract scenes: {str(e)}")
 
 
 async def generate_videos_for_scenes(
