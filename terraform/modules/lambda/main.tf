@@ -81,7 +81,7 @@ resource "aws_lambda_function" "compose_media" {
   handler       = "compose_media.lambda_handler"
   runtime       = var.lambda_runtime
   timeout       = 60 * 15
-  memory_size   = 10240
+  memory_size   = 3008
   source_code_hash = filebase64sha256(var.compose_media_package_path)
   layers = [
     aws_lambda_layer_version.compose_media_layer.arn,
