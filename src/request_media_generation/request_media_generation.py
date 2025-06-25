@@ -87,7 +87,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 # Initialize job coordination
                 if JOB_COORDINATION_TABLE:
                     initialize_job_coordination(
-                        job_id, JOB_COORDINATION_TABLE, prompt, role
+                        job_id, JOB_COORDINATION_TABLE, prompt, role, video_type
                     )
 
                 # Generate both video and audio in parallel
@@ -154,10 +154,15 @@ async def generate_media_parallel(
 
     # Start both video and audio generation concurrently
     video_task = generate_videos_for_scenes(scenes, original_prompt, role, job_id, video_type)
-    audio_task = generate_audio_for_scenes(scenes, original_prompt, role, job_id) if video_type != "short" else asyncio.sleep(0)
-
-    # Wait for both to complete
-    video_results, audio_results = await asyncio.gather(video_task, audio_task)
+    
+    if video_type != "short":
+        audio_task = generate_audio_for_scenes(scenes, original_prompt, role, job_id)
+        # Wait for both to complete
+        video_results, audio_results = await asyncio.gather(video_task, audio_task)
+    else:
+        # For shorts, only generate video, skip audio
+        video_results = await video_task
+        audio_results = []  # Empty audio results for shorts
 
     logger.info(f"Completed async parallel media generation for job: {job_id}")
     return video_results, audio_results
@@ -318,18 +323,24 @@ def get_video_request(scene: Dict[str, Any], video_type: str) -> Dict[str, Any]:
         + " "
         + scene.get("positive_prompt", scene.get("visual_description", ""))
     )
-    return {
-        "model": "fal-ai/bytedance/seedance/v1/pro/text-to-video",
-        "prompt": scene_description,
-        "aspect_ratio": "9:16",
-        "resolution": "480p",
-        "duration": scene.get("duration", 5),
-        "camera_fixed": False,
-        "seed": -1,
-    } if video_type == "short" else {
-        "model": "fal-ai/minimax/hailuo-02/standard/text-to-video",
-        "prompt": scene_description,
-    }
+    
+    if video_type == "short":
+        return {
+            "model": "fal-ai/bytedance/seedance/v1/pro/text-to-video",
+            "prompt": scene_description,
+            "aspect_ratio": "9:16",
+            "resolution": "480p", 
+            "duration": scene.get("duration", 5),
+            "camera_fixed": False,
+            "seed": -1,
+        }
+    else:
+        return {
+            "model": "fal-ai/minimax/hailuo-02/standard/text-to-video",
+            "prompt": scene_description,
+            "aspect_ratio": "16:9",
+            "duration": scene.get("duration", 10),
+        }
 
 async def generate_single_video(
     scene: Dict[str, Any], scene_index: int, job_id: str, video_type: str
@@ -466,7 +477,7 @@ async def generate_single_audio(
 
         # Voice mapping from master context
         if "master_prompt_context" in scene:
-            master_context = scene["master_prompt_context"][""]
+            master_context = scene["master_prompt_context"]
             if master_context.get("voice_style"):
                 voice_mapping = {
                     "female_alpha": "hf_alpha",
@@ -525,17 +536,30 @@ async def call_video_generation_api_async(
             logger.error(f"No prompt provided for scene {scene_number}")
             return {"error": "No prompt provided for video generation"}
 
-        arguments = {
-            "prompt": video_request.get("prompt"),
-            "aspect_ratio": video_request.get("aspect_ratio", "9:16"),
-            "resolution": video_request.get("resolution", "480p"),
-            "duration": video_request.get("duration", 5),
-            "camera_fixed": video_request.get("camera_fixed", False),
-        }
+        # Prepare arguments based on the model
+        model = video_request["model"]
+        arguments = {"prompt": video_request.get("prompt")}
+        
+        # Add model-specific arguments
+        if "bytedance/seedance" in model:
+            # Shorts model arguments
+            arguments.update({
+                "aspect_ratio": video_request.get("aspect_ratio", "9:16"),
+                "resolution": video_request.get("resolution", "480p"),
+                "duration": video_request.get("duration", 5),
+                "camera_fixed": video_request.get("camera_fixed", False),
+                "seed": video_request.get("seed", -1),
+            })
+        elif "minimax/hailuo" in model:
+            # Regular video model arguments
+            arguments.update({
+                "aspect_ratio": video_request.get("aspect_ratio", "16:9"),
+                "duration": video_request.get("duration", 10),
+            })
 
         # Submit async request
         handler = await fal_client.submit_async(
-            video_request["model"],
+            model,
             arguments=arguments,
         )
 
@@ -809,7 +833,7 @@ def generate_shared_job_id(original_prompt: str) -> str:
 
 
 def initialize_job_coordination(
-    job_id: str, table_name: str, prompt: str, role: str
+    job_id: str, table_name: str, prompt: str, role: str, video_type: str | None = None
 ) -> None:
     """Initialize job coordination record"""
     try:
@@ -819,17 +843,22 @@ def initialize_job_coordination(
 
         expires_at = int(time.time()) + (7 * 24 * 60 * 60)
 
+        item = {
+            "job_id": {"S": job_id},
+            "created_at": {"N": str(int(time.time()))},
+            "expires_at": {"N": str(expires_at)},
+            "original_prompt": {"S": prompt},
+            "role": {"S": role},
+            "video_audio_status": {"S": "pending"},
+            "composition_status": {"S": "pending"},
+        }
+        
+        if video_type:
+            item["video_type"] = {"S": video_type}
+
         dynamodb.put_item(
             TableName=table_name,
-            Item={
-                "job_id": {"S": job_id},
-                "created_at": {"N": str(int(time.time()))},
-                "expires_at": {"N": str(expires_at)},
-                "original_prompt": {"S": prompt},
-                "role": {"S": role},
-                "video_audio_status": {"S": "pending"},
-                "composition_status": {"S": "pending"},
-            },
+            Item=item,
         )
 
         logger.info(f"Initialized job coordination for {job_id}")
