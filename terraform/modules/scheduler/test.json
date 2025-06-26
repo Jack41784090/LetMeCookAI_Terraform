@@ -1,0 +1,55 @@
+{
+  "prompt": "prompt",
+  "role": "role",
+  "response": {
+    "topic": "The Churning of the Ocean (Samudra Manthan)",
+    "title": "समुद्र मंथन: जब निकला विष का काला सागर | The Churning of the Ocean: When Poison Emerged",
+    "hashtags": [
+      "#SamudraManthan",
+      "#HinduMythology",
+      "#LordShiva",
+      "#ViralStory",
+      "#धार्मिककथा",
+      "#IndianMythology"
+    ],
+    "summary": "The epic tale of Devas and Asuras churning the ocean for Amrit, only to release a deadly poison that threatened the universe—until Lord Shiva intervened.",
+    "master_prompt_context": {
+      "positive_prefix": "Epic cinematic shot for a YouTube Short, hyper-realistic 8K, cinematic fantasy art style influenced by Indian masters, dramatic lighting, rich textures, divine aura, intense emotions, shallow depth of field.",
+      "negative_prefix": "Avoid: cartoon, anime, 3D render, plastic look, watermark, text, signature, modern elements, bad anatomy, distorted faces, blurry, jpeg artifacts, extra limbs."
+    },
+    "scenes": [
+      {
+        "scene_number": 1,
+        "duration_seconds": 4,
+        "visual_description": "A vast ocean under a stormy sky. Devas and Asuras stand on either side, holding the serpent Vasuki as a rope, with Mount Mandara as the churning rod.",
+        "voiceover": "देव और दानव मिलकर समुद्र मंथन कर रहे थे... अमृत पाने की चाह में।",
+        "positive_prompt": "Epic wide shot of the ocean during Samudra Manthan, dark stormy skies, gods and demons pulling the giant serpent Vasuki, Mount Mandara as the churning rod, hyper-detailed waves splashing, divine and demonic auras clashing, cinematic lighting.",
+        "negative_prompt": "cartoon, modern elements, blurry, extra limbs."
+      },
+      {
+        "scene_number": 2,
+        "duration_seconds": 5,
+        "visual_description": "A thick, black poison (Halahala) emerges from the ocean, spreading darkness. Devas and Asuras panic, covering their faces as the poison fumes rise.",
+        "voiceover": "लेकिन समुद्र से निकला एक भयंकर विष... जो पूरे ब्रह्मांड को नष्ट कर सकता था!",
+        "positive_prompt": "Close-up of the deadly Halahala poison emerging from the ocean, thick black fumes spreading, gods and demons recoiling in fear, dark and ominous atmosphere, hyper-realistic textures, dramatic backlighting from the toxic fumes.",
+        "negative_prompt": "bright colors, happy mood, modern clothing."
+      },
+      {
+        "scene_number": 3,
+        "duration_seconds": 6,
+        "visual_description": "Lord Shiva appears, calm and majestic.... He cups his hands to collect the poison, his throat turning blue as he drinks it to save the world.",
+        "voiceover": "तब भगवान शिव ने लिया यह विष अपने कंठ में... और बच गया संसार!",
+        "positive_prompt": "Lord Shiva in a divine pose, collecting the black poison in his hands, his throat glowing blue as he drinks it, serene expression amidst chaos, cosmic background with stars, intricate jewelry and ash-covered body, godly aura.",
+        "negative_prompt": "ugly anatomy, distorted face, non-Indian features."
+      },
+      {
+        "scene_number": 4,
+        "duration_seconds": 3,
+        "visual_description": "A final shot of Shiva meditating, his blue throat glowing, as the Devas bow in gratitude. The screen fades to black with the text 'Neelkanth Mahadev'.",
+        "voiceover": "तभी से कहलाए शिव... नीलकंठ महादेव!",
+        "positive_prompt": "Lord Shiva in deep meditation, close-up of his blue throat (Neelkanth), gods bowing in the background, soft glowing light, peaceful yet powerful expression, intricate details on his matted hair and third eye.",
+        "negative_prompt": "low resolution, text overlay, modern background."
+      }
+    ]
+  }
+}

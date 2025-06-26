@@ -1,0 +1,49 @@
+{
+  "prompt": "prompt",
+  "role": "role",
+  "response": {
+    "topic": "Samudra Manthan (Churning of the Ocean)",
+    "title": "🌊💥 विष पिया शिव ने! समुद्र मंथन का रोमांच | When Shiva Drank the Ocean's Poison!",
+    "hashtags": [
+      "#SamudraManthan",
+      "#ShivaPower",
+      "#HinduMythology",
+      "#ViralMyth",
+      "#DivineSacrifice",
+      "#IndianHistory",
+      "#शिव_भक्ति",
+      "#EpicShorts"
+    ],
+    "summary": "देव और असुर समुद्र मंथन करते हैं, जहाँ निकलता है प्रलयंकारी विष। भगवान शिव सबकी रक्षा के लिए पी जाते हैं उस जहर को!",
+    "master_prompt_context": {
+      "positive_prefix": "Epic cinematic shot for a YouTube Short, hyper-realistic 8K, cinematic fantasy art style influenced by Indian masters, dramatic lighting, rich textures, divine aura, intense emotions, shallow depth of field.",
+      "negative_prefix": "Avoid: cartoon, anime, 3D render, plastic look, watermark, text, signature, modern elements, bad anatomy, distorted faces, blurry, jpeg artifacts, extra limbs."
+    },
+    "scenes": [
+      {
+        "scene_number": 1,
+        "duration_seconds": 10,
+        "visual_description": "Devas and Asuras churning ocean with Vasuki rope",
+        "voiceover": "देव और असुर मिले अमृत के लिए! समुद्र मंथन शुरू, पर...",
+        "positive_prompt": "[Wide Stormy Ocean] Massive serpent Vasuki coiled around Mount Mandara. [Low-Angle Chaos] Devas and Asuras pulling opposite ends, muscles straining. [Close-Up Dark Bubbles] Black poison erupting from churning waters.",
+        "negative_prompt": "Avoid bright colors, smiling faces, calm water"
+      },
+      {
+        "scene_number": 2,
+        "duration_seconds": 10,
+        "visual_description": "Shiva swallowing the poison",
+        "voiceover": "निकला हलाहल विष! सृष्टी संकट में! तभी...",
+        "positive_prompt": "[Extreme Close-Up Hands] Shiva catching dark, glowing poison. [Heroic Low-Angle] Shiva tipping poison into his mouth, eyes blazing. [Dramatic Backlight] Blue veins spreading on neck as poison takes effect.",
+        "negative_prompt": "Avoid clean skin, peaceful expression, modern clothing"
+      },
+      {
+        "scene_number": 3,
+        "duration_seconds": 10,
+        "visual_description": "Shiva as Neelkantha with Parvati",
+        "voiceover": "शिव पी गए सारा जहर! गले का नीला हुआ रंग, बन गए नीलकंठ! जय हो महादेव!",
+        "positive_prompt": "[God Rays Portrait] Shiva with blue-throated glow, cosmic energy radiating. [Close-Up Tear] Parvati's hand on his neck, protective gesture. [Epic Wide Shot] Shiva meditating as devas bow, moonlit Himalayas.",
+        "negative_prompt": "Avoid weak aura, normal skin tone, daytime setting"
+      }
+    ]
+  }
+}
