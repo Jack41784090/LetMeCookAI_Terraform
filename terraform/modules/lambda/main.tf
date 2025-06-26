@@ -56,11 +56,12 @@ resource "aws_lambda_function" "request_media_generation" {
 
   environment {
     variables = {
-      FAL_KEY                = var.fal_key
-      JOB_QUEUE_URL          = var.sqs_queue_url
-      S3_BUCKET              = var.generated_videos_s3_bucket_name
-      COMPOSE_FUNCTION_NAME  = "${var.app_name}-compose-media"
-      JOB_COORDINATION_TABLE = var.job_coordination_table_name
+      FAL_KEY                      = var.fal_key
+      JOB_QUEUE_URL                = var.sqs_queue_url
+      S3_BUCKET                    = var.generated_videos_s3_bucket_name
+      COMPOSE_FUNCTION_NAME        = "${var.app_name}-compose-media"
+      YOUTUBE_UPLOAD_FUNCTION_NAME = "${var.app_name}-upload-youtube"
+      JOB_COORDINATION_TABLE       = var.job_coordination_table_name
     }
   }
 
@@ -90,8 +91,42 @@ resource "aws_lambda_function" "compose_media" {
 
   environment {
     variables = {
-      S3_BUCKET              = var.generated_videos_s3_bucket_name
-      JOB_COORDINATION_TABLE = var.job_coordination_table_name
+      S3_BUCKET                    = var.generated_videos_s3_bucket_name
+      JOB_COORDINATION_TABLE       = var.job_coordination_table_name
+      YOUTUBE_UPLOAD_FUNCTION_NAME = "${var.app_name}-upload-youtube"
+    }
+  }
+
+  tags = var.tags
+}
+
+resource "aws_lambda_layer_version" "upload_youtube_layer" {
+  filename            = "lambda_packages/lambda-layer-upload_youtube.zip"
+  layer_name          = "lambda-layer-upload_youtube"
+  compatible_runtimes = ["python3.10"]
+  source_code_hash    = filebase64sha256("lambda_packages/lambda-layer-upload_youtube.zip")
+}
+
+resource "aws_lambda_function" "upload_youtube" {
+  filename         = var.upload_youtube_package_path
+  function_name    = "${var.app_name}-upload-youtube"
+  role             = var.lambda_role_arn
+  handler          = "upload-youtube.lambda_handler"
+  runtime          = var.lambda_runtime
+  timeout          = 60 * 15
+  memory_size      = 1024
+  source_code_hash = filebase64sha256(var.upload_youtube_package_path)
+  layers = [
+    aws_lambda_layer_version.upload_youtube_layer.arn
+  ]
+
+  environment {
+    variables = {
+      S3_BUCKET                = var.generated_videos_s3_bucket_name
+      JOB_COORDINATION_TABLE   = var.job_coordination_table_name
+      YOUTUBE_CLIENT_ID        = var.youtube_client_id
+      YOUTUBE_CLIENT_SECRET    = var.youtube_client_secret
+      YOUTUBE_REFRESH_TOKEN    = var.youtube_refresh_token
     }
   }
 

@@ -57,8 +57,26 @@ variable "job_coordination_table_name" {
   type        = string
 }
 
-variable "tags" {
-  description = "Tags to apply to all resources"
-  type        = map(string)
-  default     = {}
+variable "upload_youtube_package_path" {
+  description = "Path to the upload YouTube Lambda deployment package"
+  type        = string
+  default     = "lambda_packages/upload_youtube.zip"
+}
+
+variable "youtube_client_id" {
+  description = "YouTube API OAuth client ID"
+  type        = string
+  sensitive   = true
+}
+
+variable "youtube_client_secret" {
+  description = "YouTube API OAuth client secret"
+  type        = string
+  sensitive   = true
+}
+
+variable "youtube_refresh_token" {
+  description = "YouTube API OAuth refresh token"
+  type        = string
+  sensitive   = true
 }

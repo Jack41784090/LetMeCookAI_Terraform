@@ -67,6 +67,9 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         update_job_coordination_status(job_id, "composition_status", "complete")
         update_job_coordination_status(job_id, "final_video_url", composed_video_url)
 
+        # Trigger YouTube upload for regular videos
+        trigger_youtube_upload(job_id)
+
         logger.info(
             f"Successfully composed video for job {job_id}: {composed_video_url}"
         )
@@ -422,3 +425,28 @@ def concatenate_from_file(concat_file: str, output_path: str) -> None:
     except Exception as e:
         logger.error(f"Error concatenating scenes: {str(e)}")
         raise
+
+
+def trigger_youtube_upload(job_id: str) -> None:
+    """Trigger YouTube upload Lambda function for composed video"""
+    try:
+        youtube_upload_function_name = os.environ.get("YOUTUBE_UPLOAD_FUNCTION_NAME")
+        if not youtube_upload_function_name:
+            logger.error("YOUTUBE_UPLOAD_FUNCTION_NAME environment variable not set")
+            return
+
+        payload = {
+            "job_id": job_id,
+            "video_type": "regular"
+        }
+
+        lambda_client.invoke(
+            FunctionName=youtube_upload_function_name,
+            InvocationType="Event",
+            Payload=json.dumps(payload),
+        )
+        
+        logger.info(f"Successfully triggered YouTube upload for job {job_id}")
+        
+    except Exception as e:
+        logger.error(f"Failed to trigger YouTube upload for job {job_id}: {str(e)}")
