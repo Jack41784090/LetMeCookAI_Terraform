@@ -786,7 +786,7 @@ def generate_shared_job_id(original_prompt: str) -> str:
 
 
 def initialize_job_coordination(
-    job_id: str, table_name: str, prompt: str, role: str, video_type: str | None = None, ai_response: str | None = None
+    job_id: str, table_name: str, prompt: str, role: str, video_type: str | None = None, ai_response: dict | None = None
 ) -> None:
     """Initialize job coordination record with video metadata"""
     try:
@@ -812,7 +812,7 @@ def initialize_job_coordination(
         # Extract and store video metadata from AI response
         if ai_response:
             try:
-                response_data = json.loads(ai_response)
+                response_data = ai_response if isinstance(ai_response, dict) else json.loads(ai_response)
                 
                 if "title" in response_data:
                     item["video_title"] = {"S": response_data["title"]}
