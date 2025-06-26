@@ -64,8 +64,6 @@ resource "aws_lambda_function" "request_media_generation" {
       JOB_COORDINATION_TABLE       = var.job_coordination_table_name
     }
   }
-
-  tags = var.tags
 }
 
 resource "aws_lambda_layer_version" "compose_media_layer" {
@@ -96,8 +94,6 @@ resource "aws_lambda_function" "compose_media" {
       YOUTUBE_UPLOAD_FUNCTION_NAME = "${var.app_name}-upload-youtube"
     }
   }
-
-  tags = var.tags
 }
 
 resource "aws_lambda_layer_version" "upload_youtube_layer" {
@@ -129,6 +125,4 @@ resource "aws_lambda_function" "upload_youtube" {
       YOUTUBE_REFRESH_TOKEN    = var.youtube_refresh_token
     }
   }
-
-  tags = var.tags
 }
