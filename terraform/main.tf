@@ -36,11 +36,14 @@ module "lambda" {
   lambda_timeout                  = var.lambda_timeout
   request_script_package_path     = "lambda_packages/request_script.zip"
   sqs_queue_url                   = module.storage.sqs_queue_url
-  tags                            = local.tags
   generated_videos_s3_bucket_name = module.storage.generated_video_bucket_name
   fal_key                         = var.fal_key
   compose_media_package_path      = "lambda_packages/compose_media.zip"
   job_coordination_table_name     = module.storage.job_coordination_table_name
+  youtube_client_id               = var.youtube_client_id
+  youtube_client_secret           = var.youtube_client_secret
+  youtube_refresh_token           = var.youtube_refresh_token
+  
 }
 
 module "scheduler" {

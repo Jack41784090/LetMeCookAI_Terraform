@@ -130,3 +130,21 @@ variable "fal_key" {
   description = "FAL API key"
   type        = string
 }
+
+variable "youtube_client_id" {
+  description = "YouTube API OAuth client ID"
+  type        = string
+  sensitive   = true
+}
+
+variable "youtube_client_secret" {
+  description = "YouTube API OAuth client secret"
+  type        = string
+  sensitive   = true
+}
+
+variable "youtube_refresh_token" {
+  description = "YouTube API OAuth refresh token"
+  type        = string
+  sensitive   = true
+}
