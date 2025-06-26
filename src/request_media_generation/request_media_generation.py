@@ -87,7 +87,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 # Initialize job coordination
                 if JOB_COORDINATION_TABLE:
                     initialize_job_coordination(
-                        job_id, JOB_COORDINATION_TABLE, prompt, role, video_type
+                        job_id, JOB_COORDINATION_TABLE, prompt, role, video_type, response
                     )
 
                 # Generate both video and audio in parallel
@@ -786,9 +786,9 @@ def generate_shared_job_id(original_prompt: str) -> str:
 
 
 def initialize_job_coordination(
-    job_id: str, table_name: str, prompt: str, role: str, video_type: str | None = None
+    job_id: str, table_name: str, prompt: str, role: str, video_type: str | None = None, ai_response: str | None = None
 ) -> None:
-    """Initialize job coordination record"""
+    """Initialize job coordination record with video metadata"""
     try:
         if not table_name:
             logger.warning("No coordination table specified")
@@ -808,6 +808,32 @@ def initialize_job_coordination(
         
         if video_type:
             item["video_type"] = {"S": video_type}
+        
+        # Extract and store video metadata from AI response
+        if ai_response:
+            try:
+                response_data = json.loads(ai_response)
+                
+                if "title" in response_data:
+                    item["video_title"] = {"S": response_data["title"]}
+                
+                if "summary" in response_data:
+                    item["video_summary"] = {"S": response_data["summary"]}
+                
+                if "hashtags" in response_data and isinstance(response_data["hashtags"], list):
+                    # Store hashtags as a string (comma-separated)
+                    hashtags_str = ",".join(response_data["hashtags"])
+                    item["video_hashtags"] = {"S": hashtags_str}
+                
+                if "topic" in response_data:
+                    item["video_topic"] = {"S": response_data["topic"]}
+                    
+                logger.info(f"Stored video metadata for job {job_id}: title={response_data.get('title', 'N/A')}")
+                
+            except json.JSONDecodeError:
+                logger.warning(f"Failed to parse AI response JSON for job {job_id}")
+            except Exception as e:
+                logger.warning(f"Error extracting video metadata for job {job_id}: {str(e)}")
 
         dynamodb.put_item(
             TableName=table_name,
