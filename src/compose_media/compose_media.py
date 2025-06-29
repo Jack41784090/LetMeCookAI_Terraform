@@ -47,7 +47,12 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 "body": json.dumps({"error": "job_id is required"}),
             }
 
+        # Extract response object from event if present
+        response_obj = event.get("response", {})
+
         logger.info(f"Starting composition for job: {job_id}")
+        if response_obj:
+            logger.info(f"Received response object with title: {response_obj.get('title', 'N/A')}")
 
         # Check if both audio and video are complete
         if not check_both_ready(job_id):
@@ -67,8 +72,8 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         update_job_coordination_status(job_id, "composition_status", "complete")
         update_job_coordination_status(job_id, "final_video_url", composed_video_url)
 
-        # Trigger YouTube upload for regular videos
-        trigger_youtube_upload(job_id)
+        # Trigger YouTube upload for regular videos with response object
+        trigger_youtube_upload(job_id, response_obj)
 
         logger.info(
             f"Successfully composed video for job {job_id}: {composed_video_url}"
@@ -427,7 +432,7 @@ def concatenate_from_file(concat_file: str, output_path: str) -> None:
         raise
 
 
-def trigger_youtube_upload(job_id: str) -> None:
+def trigger_youtube_upload(job_id: str, response_obj: Dict[str, Any] | None = None) -> None:
     """Trigger YouTube upload Lambda function for composed video"""
     try:
         youtube_upload_function_name = os.environ.get("YOUTUBE_UPLOAD_FUNCTION_NAME")
@@ -435,10 +440,15 @@ def trigger_youtube_upload(job_id: str) -> None:
             logger.error("YOUTUBE_UPLOAD_FUNCTION_NAME environment variable not set")
             return
 
-        payload = {
+        payload: Dict[str, Any] = {
             "job_id": job_id,
             "video_type": "regular"
         }
+        
+        # Add response object if available
+        if response_obj:
+            payload["response"] = response_obj
+            logger.info(f"Including response object in YouTube upload payload for job {job_id}")
 
         lambda_client.invoke(
             FunctionName=youtube_upload_function_name,

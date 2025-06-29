@@ -103,7 +103,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 # Update job coordination status to complete and trigger composition
                 if JOB_COORDINATION_TABLE:
                     update_job_coordination_status(
-                        job_id, "video_audio", "complete", JOB_COORDINATION_TABLE, video_type
+                        job_id, "video_audio", "complete", JOB_COORDINATION_TABLE, video_type, response
                     )
 
                 processed_count += 1
@@ -814,21 +814,27 @@ def initialize_job_coordination(
             try:
                 response_data = ai_response if isinstance(ai_response, dict) else json.loads(ai_response)
                 
-                if "title" in response_data:
-                    item["video_title"] = {"S": response_data["title"]}
+                # Handle nested response structure (like churning-of-the-ocean.json)
+                response_obj = response_data.get("response", response_data)
                 
-                if "summary" in response_data:
-                    item["video_summary"] = {"S": response_data["summary"]}
+                if "title" in response_obj:
+                    item["video_title"] = {"S": response_obj["title"]}
                 
-                if "hashtags" in response_data and isinstance(response_data["hashtags"], list):
+                if "summary" in response_obj:
+                    item["video_summary"] = {"S": response_obj["summary"]}
+                
+                if "hashtags" in response_obj and isinstance(response_obj["hashtags"], list):
                     # Store hashtags as a string (comma-separated)
-                    hashtags_str = ",".join(response_data["hashtags"])
+                    hashtags_str = ",".join(response_obj["hashtags"])
                     item["video_hashtags"] = {"S": hashtags_str}
                 
-                if "topic" in response_data:
-                    item["video_topic"] = {"S": response_data["topic"]}
+                if "topic" in response_obj:
+                    item["video_topic"] = {"S": response_obj["topic"]}
+                
+                # Store the full AI response for potential future use
+                item["ai_response"] = {"S": ai_response if isinstance(ai_response, str) else json.dumps(ai_response)}
                     
-                logger.info(f"Stored video metadata for job {job_id}: title={response_data.get('title', 'N/A')}")
+                logger.info(f"Stored video metadata for job {job_id}: title={response_obj.get('title', 'N/A')}")
                 
             except json.JSONDecodeError:
                 logger.warning(f"Failed to parse AI response JSON for job {job_id}")
@@ -847,7 +853,7 @@ def initialize_job_coordination(
 
 
 def update_job_coordination_status(
-    job_id: str, component: str, status: str, table_name: str, video_type: str | None = None
+    job_id: str, component: str, status: str, table_name: str, video_type: str | None = None, ai_response: str | None = None
 ) -> None:
     """Update job coordination status and trigger composition or direct upload if ready"""
     try:
@@ -873,6 +879,22 @@ def update_job_coordination_status(
         )
         
         if component == "video_audio" and status == "complete":
+            # Extract video metadata from AI response for lambda payload
+            response_payload = {}
+            if ai_response:
+                try:
+                    response_data = json.loads(ai_response) if isinstance(ai_response, str) else ai_response
+                    
+                    # Handle nested response structure - pass the response object directly
+                    if "response" in response_data:
+                        response_payload["response"] = response_data["response"]
+                    else:
+                        response_payload["response"] = response_data
+                    
+                    logger.info(f"Extracted response payload for job {job_id}")
+                except Exception as e:
+                    logger.warning(f"Failed to extract response payload for job {job_id}: {str(e)}")
+            
             # For shorts, skip composition and trigger direct YouTube upload
             if video_type == "short":
                 logger.info(
@@ -885,18 +907,27 @@ def update_job_coordination_status(
                         logger.error("YOUTUBE_UPLOAD_FUNCTION_NAME environment variable not set")
                         return
 
+                    # Prepare payload with response object
+                    payload = {
+                        "job_id": job_id, 
+                        "video_type": "short"
+                    }
+                    # Add response object if available
+                    if response_payload:
+                        payload.update(response_payload)
+
                     lambda_client.invoke(
                         FunctionName=youtube_upload_function_name,
                         InvocationType="Event",
-                        Payload=json.dumps({"job_id": job_id, "type": "short"}),
+                        Payload=json.dumps(payload),
                     )
-                    logger.info(f"Successfully triggered YouTube upload for shorts job {job_id}")
+                    logger.info(f"Successfully triggered YouTube upload for shorts job {job_id} with metadata")
                 except Exception as e:
                     logger.error(
                         f"Failed to trigger YouTube upload for shorts job {job_id}: {str(e)}"
                     )
             else:
-                # For regular videos, trigger composition
+                # For regular videos, trigger composition with metadata
                 logger.info(
                     f"Both video and audio ready for job {job_id}, triggering composition"
                 )
@@ -907,12 +938,18 @@ def update_job_coordination_status(
                         logger.error("COMPOSE_FUNCTION_NAME environment variable not set")
                         return
 
+                    # Prepare payload with response object
+                    payload = {"job_id": job_id}
+                    # Add response object if available
+                    if response_payload:
+                        payload.update(response_payload)
+
                     lambda_client.invoke(
                         FunctionName=compose_function_name,
                         InvocationType="Event",
-                        Payload=json.dumps({"job_id": job_id}),
+                        Payload=json.dumps(payload),
                     )
-                    logger.info(f"Successfully triggered composition for job {job_id}")
+                    logger.info(f"Successfully triggered composition for job {job_id} with metadata")
                 except Exception as e:
                     logger.error(
                         f"Failed to trigger composition for job {job_id}: {str(e)}"
