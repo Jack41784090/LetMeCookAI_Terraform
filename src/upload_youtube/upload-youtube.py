@@ -71,10 +71,19 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             # Map response properties to job_details keys for compatibility
             if "title" in response_from_event:
                 job_details["video_title"] = response_from_event["title"]
+            elif "video_title" in response_from_event:
+                job_details["video_title"] = response_from_event["video_title"]
+            
             if "summary" in response_from_event:
                 job_details["video_summary"] = response_from_event["summary"]
+            elif "description" in response_from_event:
+                job_details["video_summary"] = response_from_event["description"]
+            
             if "hashtags" in response_from_event:
                 job_details["video_hashtags"] = response_from_event["hashtags"]
+            elif "tags" in response_from_event:
+                job_details["video_hashtags"] = response_from_event["tags"]
+            
             if "topic" in response_from_event:
                 job_details["video_topic"] = response_from_event["topic"]
         else:
