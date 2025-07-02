@@ -1,3 +1,4 @@
+from doctest import master
 import json
 import os
 import boto3
@@ -72,8 +73,14 @@ def process_media_request(message: Dict[str, Any]) -> str:
     initialize_job(job_id, prompt, role, video_type, str(response))
 
     # Generate media
+    master_prompt = response.get("master_prompt_context")
+    if not master_prompt:
+        raise ValueError("Master prompt context missing in response")
+    master_positive_prompt = master_prompt.get("positive_prefix")
+    if not master_positive_prompt:
+        raise ValueError("Master positive prompt missing in response")
     video_results, audio_results = asyncio.run(
-        generate_media(scenes, job_id, video_type)
+        generate_media(scenes, job_id, video_type, master_positive_prompt)
     )
 
     # Store results and update status
@@ -123,14 +130,14 @@ def extract_scenes(response) -> List[Dict[str, Any]]:
 
 
 async def generate_media(
-    scenes: List[Dict[str, Any]], job_id: str, video_type: str
+    scenes: List[Dict[str, Any]], job_id: str, video_type: str, master_prompt: str
 ) -> tuple:
     """Generate video and audio for all scenes in parallel."""
     logger.info(f"Starting media generation for job: {job_id}")
 
     # Create video generation tasks
     video_tasks = [
-        generate_video(scene, i, job_id, video_type) for i, scene in enumerate(scenes)
+        generate_video(scene, i, job_id, video_type, master_prompt) for i, scene in enumerate(scenes)
     ]
 
     # For shorts, skip audio generation
@@ -174,7 +181,7 @@ def process_results(
 
 
 async def generate_video(
-    scene: Dict[str, Any], scene_index: int, job_id: str, video_type: str
+    scene: Dict[str, Any], scene_index: int, job_id: str, video_type: str, master_prompt: str
 ) -> Dict[str, Any]:
     """Generate a single video asynchronously."""
     try:
@@ -184,7 +191,7 @@ async def generate_video(
         logger.info(f"Generating video for scene {scene_number}")
 
         # Prepare video request
-        video_request = get_video_request(scene, video_type)
+        video_request = get_video_request(scene, video_type, master_prompt)
 
         # Generate video
         video_result = await call_video_api(video_request, job_id, scene_number)
@@ -253,13 +260,10 @@ async def generate_audio(
         }
 
 
-def get_video_request(scene: Dict[str, Any], video_type: str) -> Dict[str, Any]:
+def get_video_request(scene: Dict[str, Any], video_type: str, master_prompt: str) -> Dict[str, Any]:
     """Prepare video generation request."""
-    scene_description = (
-        scene.get("master_prompt_context", {}).get("positive_prefix", "")
-        + " "
-        + scene.get("positive_prompt", scene.get("visual_description", ""))
-    )
+    positive_prompt = scene.get("positive_prompt")
+    scene_description = f"{positive_prompt} {master_prompt}".strip()
 
     if video_type == "short":
         return {
