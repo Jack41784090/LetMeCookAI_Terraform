@@ -129,14 +129,29 @@ def process_media_request(message: Dict[str, Any]) -> str:
     initialize_job(job_id, prompt, role, video_type, str(response))
 
     # Generate media
-    master_prompt = response.get("master_prompt_context")
-    if not master_prompt:
-        logger.error("Master prompt context missing in response", extra={"job_id": job_id})
-        raise ValueError("Master prompt context missing in response")
-    master_positive_prompt = master_prompt.get("positive_prefix")
-    if not master_positive_prompt:
-        logger.error("Master positive prompt missing in response", extra={"job_id": job_id})
-        raise ValueError("Master positive prompt missing in response")
+    try:
+        # Parse response to extract master_prompt_context
+        if isinstance(response, str):
+            logger.debug("Parsing response string for master prompt context")
+            cleaned_response = response.strip().replace("```json", "").replace("```", "")
+            parsed_response = json.loads(cleaned_response)
+        else:
+            parsed_response = response
+            
+        master_prompt = parsed_response.get("master_prompt_context")
+        if not master_prompt:
+            logger.error("Master prompt context missing in response", extra={"job_id": job_id})
+            raise ValueError("Master prompt context missing in response")
+        master_positive_prompt = master_prompt.get("positive_prefix")
+        if not master_positive_prompt:
+            logger.error("Master positive prompt missing in response", extra={"job_id": job_id})
+            raise ValueError("Master positive prompt missing in response")
+    except (json.JSONDecodeError, AttributeError) as e:
+        logger.error(f"Failed to parse response for master prompt context: {str(e)}", extra={
+            "job_id": job_id,
+            "error_type": type(e).__name__
+        })
+        raise ValueError(f"Invalid response format for master prompt extraction: {str(e)}")
     
     logger.info(f"Starting media generation for job {job_id}", extra={
         "job_id": job_id,
@@ -738,47 +753,76 @@ def initialize_job(
         # Extract video metadata from AI response
         if ai_response:
             try:
-                response_data = (
-                    ai_response
-                    if isinstance(ai_response, dict)
-                    else json.loads(ai_response)
-                )
-                response_obj = response_data.get("response", response_data)
+                # Handle both string and dict types for ai_response
+                if isinstance(ai_response, str):
+                    # Clean and parse JSON string
+                    cleaned_response = ai_response.strip().replace("```json", "").replace("```", "")
+                    if cleaned_response:  # Only parse if not empty
+                        response_data = json.loads(cleaned_response)
+                    else:
+                        logger.warning(f"Empty AI response string for job {job_id}")
+                        response_data = {}
+                else:
+                    response_data = ai_response
+                
+                # Extract metadata from response structure
+                response_obj = response_data.get("response", response_data) if isinstance(response_data, dict) else {}
 
                 metadata_fields = ["title", "summary", "topic"]
+                extracted_fields = []
+                
                 for field in metadata_fields:
-                    if field in response_obj:
-                        item[f"video_{field}"] = {"S": response_obj[field]}
+                    if isinstance(response_obj, dict) and field in response_obj:
+                        item[f"video_{field}"] = {"S": str(response_obj[field])}
+                        extracted_fields.append(field)
 
-                if "hashtags" in response_obj and isinstance(
+                if isinstance(response_obj, dict) and "hashtags" in response_obj and isinstance(
                     response_obj["hashtags"], list
                 ):
-                    item["video_hashtags"] = {"S": ",".join(response_obj["hashtags"])}
+                    item["video_hashtags"] = {"S": ",".join(str(tag) for tag in response_obj["hashtags"])}
+                    extracted_fields.append("hashtags")
 
+                # Store the full AI response
                 item["ai_response"] = {
-                    "S": (
-                        ai_response
-                        if isinstance(ai_response, str)
-                        else json.dumps(ai_response)
-                    )
+                    "S": ai_response if isinstance(ai_response, str) else json.dumps(ai_response)
                 }
 
                 logger.debug(f"Extracted metadata for job {job_id}", extra={
                     "job_id": job_id,
-                    "extracted_fields": [f for f in metadata_fields if f"video_{f}" in item]
+                    "extracted_fields": extracted_fields,
+                    "response_type": type(response_data).__name__
                 })
 
-            except Exception as e:
-                logger.warning(f"Failed to extract video metadata for job {job_id}: {str(e)}")
+            except (json.JSONDecodeError, AttributeError, TypeError) as e:
+                logger.warning(f"Failed to extract video metadata for job {job_id}: {str(e)}", extra={
+                    "job_id": job_id,
+                    "error_type": type(e).__name__,
+                    "ai_response_type": type(ai_response).__name__
+                })
+                # Still store the raw response even if parsing fails
+                item["ai_response"] = {
+                    "S": ai_response if isinstance(ai_response, str) else str(ai_response)
+                }
 
-        dynamodb.put_item(TableName=JOB_COORDINATION_TABLE, Item=item)
-        logger.info(f"Job coordination initialized successfully for {job_id}")
+        try:
+            dynamodb.put_item(TableName=JOB_COORDINATION_TABLE, Item=item)
+            logger.info(f"Job coordination initialized successfully for {job_id}")
+        except Exception as db_error:
+            logger.error(f"DynamoDB put_item failed for job {job_id}: {str(db_error)}", extra={
+                "job_id": job_id,
+                "error_type": type(db_error).__name__,
+                "table_name": JOB_COORDINATION_TABLE
+            })
+            # Don't re-raise this error to allow processing to continue
+            logger.warning(f"Continuing without job coordination for {job_id}")
 
     except Exception as e:
         logger.error(f"Error initializing job coordination for {job_id}: {str(e)}", extra={
             "job_id": job_id,
-            "error_type": type(e).__name__
+            "error_type": type(e).__name__,
+            "table_configured": bool(JOB_COORDINATION_TABLE)
         }, exc_info=True)
+        # Don't re-raise to allow processing to continue without job coordination
 
 
 def store_results(
