@@ -126,9 +126,15 @@ def generate_ai_content(prompt: str, role: str, type_param: str) -> str:
             raise ValueError("No valid response from AI model")
         
         content = response.choices[0].message.content
+        
+        # Extract usage information safely
+        usage_tokens = None
+        if hasattr(response, 'usage') and response.usage:
+            usage_tokens = getattr(response.usage, 'total_tokens', None)
+        
         logger.info(f"AI content generated successfully", extra={
             "response_length": len(content),
-            "usage_tokens": getattr(response, 'usage', {}).get('total_tokens') if hasattr(response, 'usage') else None
+            "usage_tokens": usage_tokens
         })
         
         return content
