@@ -10,9 +10,42 @@ import requests
 from typing import Any, Dict, List
 from urllib.parse import urlparse
 
-# Configure logging
+# Configure logging with structured output
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
+
+# Create a custom formatter that includes extra fields
+class StructuredFormatter(logging.Formatter):
+    def format(self, record):
+        # Get the base message
+        base_msg = super().format(record)
+        
+        # Add extra fields if they exist
+        extra_fields = {}
+        for key, value in record.__dict__.items():
+            if key not in ['name', 'msg', 'args', 'levelname', 'levelno', 'pathname', 
+                          'filename', 'module', 'lineno', 'funcName', 'created', 
+                          'msecs', 'relativeCreated', 'thread', 'threadName', 
+                          'processName', 'process', 'getMessage', 'exc_info', 
+                          'exc_text', 'stack_info', 'message']:
+                extra_fields[key] = value
+        
+        if extra_fields:
+            import json
+            extra_json = json.dumps(extra_fields, default=str)
+            return f"{base_msg} | EXTRA: {extra_json}"
+        
+        return base_msg
+
+# Apply the formatter to existing handlers
+for handler in logger.handlers:
+    handler.setFormatter(StructuredFormatter())
+
+# If no handlers exist, add one
+if not logger.handlers:
+    handler = logging.StreamHandler()
+    handler.setFormatter(StructuredFormatter())
+    logger.addHandler(handler)
 
 # Initialize AWS clients
 region = "us-east-2"
