@@ -1,67 +1,35 @@
-# resource "aws_scheduler_schedule" "daily-script-make" {
-#   name = "daily-script-make"
+resource "aws_scheduler_schedule" "daily-shorts-script-make" {
+  name = "daily-shorts-script-make"
+  flexible_time_window {
+    mode                      = "FLEXIBLE"
+    maximum_window_in_minutes = 120
+  }
+  schedule_expression = "cron(0 0 * * ? *)" # This cron expression runs the script daily at midnight UTC
+  target {
+    arn      = var.request_script_lambda_arn
+    role_arn = var.request_script_lambda_role
+    input = jsonencode({
+      "role" : "You are a creative strategist and scriptwriter who turns miraculous, real-world rescues by Hindu deities into viral YouTube Shorts (≤ 10 s). Each short dramatizes a Hindu god or goddess saving people from modern accidents—car crashes on icy Canadian highways, Mumbai monsoon floods, earthquakes, wildfires, etc.—for a Hindi-speaking audience in both India and the Canadian diaspora.",
+      "prompt" : "Create eye-catching 10-second YouTube Shorts featuring Hindu deities performing miraculous rescues in modern scenarios. Focus purely on visual impact and scroll-stopping appeal.  \n\nKey Elements:  \n- Instant hook: Start with disaster or danger (car crash, falling bridge, flood)  \n- Divine moment: God appears with stunning visual effects (golden light, divine aura)  \n- Quick resolution: Person saved in dramatic fashion  \n- Keep it simple and visually striking - this is about catching attention, not complex storytelling  \n\nRequired Output (return ONE clean JSON object, no extra commentary):  \n{\n  \"topic\": \"[Miraculous Hindu-deity rescue, e.g., 'Shiva stops runaway truck']\",\n  \"title\": \"Any title that will garner the most clicks using shock and awe and clickbait, e.g., 🔱✨ अध्भुत उद्धार | Divine Rescue\",\n  \"hashtags\": [\n \"#HinduGods\",\n \"#DivineIntervention\",\n \"#Canada\",\n \"#India\",\n \"#Shorts\",\n \"#भक्ति\",\n \"#Viral\",\n \"#Miracle\",\n \"#Faith\",\n \"#Spirituality\",\n \"#Mythology\",\n \"#Hindu\",\n \"#God\",\n \"#Divine\",\n \"#Rescue\",\n \"#Amazing\",\n \"#Incredible\",\n \"#MustWatch\",\n \"#Trending\",\n \"#Religious\",\n \"#Sacred\",\n \"#Devotion\",\n \"#Prayer\",\n \"#Blessed\",\n \"#Powerful\",\n \"#Epic\",\n \"#YouTubeShorts\",\n \"#ViralVideo\",\n \"#IndianCulture\",\n \"#हिंदू\",\n \"#भगवान\",\n \"#चमत्कार\",\n \"#आस्था\",\n \"#धर्म\",\n \"#शिव\",\n \"#विष्णु\",\n \"#गणेश\",\n \"#हनुमान\",\n \"#कृष्णा\",\n \"#राम\",\n \"#दुर्गा\",\n \"#लक्ष्मी\",\n \"#सरस्वती\",\n \"#ईश्वर\",\n \"#प्रभु\",\n \"#देवता\",\n \"#आध्यात्म\",\n \"#मंदिर\",\n \"#पूजा\",\n \"#मंत्र\",\n \"#यूट्यूबशॉर्ट्स\",\n \"#वायरल\"\n  ],\n  \"summary\": \"1-2 lines summarising the rescue and the awe-inspiring lesson.\",\n  \"master_prompt_context\": {\n \"positive_prefix\": \"Indian/South Asian characters, authentic ethnic features, traditional Indian facial characteristics, cultural authenticity, Indian family/person with traditional South Asian features, authentic ethnic representation\",\n \"negative_prefix\": \"Avoid: cartoon, anime, 3D render, plastic look, watermark, text, signature, modern UI, bad anatomy, distorted faces, blurry, jpeg artifacts, extra limbs.\"\n  },\n  \"scenes\": [{\n \"scene_number\": 1,\n \"duration_seconds\": 10,\n \"visual_description\": \"≤ 25-word snapshot capturing the disaster and the god's awe-inspiring rescue.\",\n \"voiceover\": \"1-2 line Hindi VO delivering the emotional punch.\",\n \"positive_prompt\": \"assume the role of a prompt engineer, put your positive prompts here to generate a viral, eyecatching video short\",\n \"negative_prompt\": \"[Concise negatives]\"\n  }]\n}",
+      "type" : "short"
+    })
+  }
+}
+
+# resource "aws_scheduler_schedule" "weekly-long-form-script-make" {
+#   name = "weekly-long-form-script-make"
 #   flexible_time_window {
 #     mode                      = "FLEXIBLE"
-#     maximum_window_in_minutes = 60
+#     maximum_window_in_minutes = 120
 #   }
-#   schedule_expression = "cron(0 0 * * ? *)" # This cron expression runs the script daily at midnight UTC
+#   schedule_expression = "cron(0 0 * * 1 *)" # This cron expression runs the script weekly on Mondays at midnight UTC
 #   target {
 #     arn      = var.request_script_lambda_arn
 #     role_arn = var.request_script_lambda_role
 #     input = jsonencode({
-#       role   = <<EOF
-# You are a creative strategist and scriptwriter specializing in viral YouTube Shorts (<60 seconds). Your expertise lies in transforming complex narratives from Hindu mythology and Indian history into fast-paced, emotionally resonant, and visually stunning short-form videos for a modern, Hindi-speaking audience.
-
-# Your task is to develop a complete production blueprint for a viral YouTube Short based on the topic I provide.
-
-# ### **Guiding Principles for Viral Content:**
-
-# 1.  **The Hook (First 3 Seconds):** The video must open with an immediate visual and narrative hook. Pose a question, show a dramatic moment, or create an enigma to stop the user from scrolling.
-# 2.  **Narrative Pacing:** The story must be concise and impactful. Structure the narrative with a clear beginning (setup), middle (conflict/climax), and end (resolution/moral). Each scene should transition seamlessly to the next, maintaining momentum.
-# 3.  **Emotional Core:** Identify the central emotion of the story (e.g., sacrifice, devotion, betrayal, awe) and build the script and visuals around amplifying that feeling.
-# 4.  **Visual Storytelling:** The AI art prompts must be cinematic and dynamic. Use descriptive language specifying camera angles, lighting, and mood. The goal is to create visuals that could stand on their own.
-# EOF
-#       prompt = <<EOF
-# Generate a script of any viral Hindi or Indian mythological story.
-
-# ### **Required Output Format:**
-# Your final output **MUST be a single, clean JSON object** following the schema below. Do not include any introductory text, explanations, or comments outside of the JSON structure.
-
-# #### **JSON Schema:**
-# ```json
-# {
-#   "topic": "[any viral indian/hinduism mythological story as a topic]",
-#   "title": "[Generate an optimized, eye-catching title in Hindi with an English translation]",
-#   "hashtags": [
-#     "[Generate relevant hashtags, including a mix of Hindi and English]"
-#   ],
-#   "summary": "[Provide a brief, 1-2 sentence summary of the video's narrative]",
-#   "master_prompt_context": {
-#     "positive_prefix": "Epic cinematic shot for a YouTube Short, hyper-realistic 8K, cinematic fantasy art style influenced by Indian masters, dramatic lighting, rich textures, divine aura, intense emotions, shallow depth of field.",
-#     "negative_prefix": "Avoid: cartoon, anime, 3D render, plastic look, watermark, text, signature, modern elements, bad anatomy, distorted faces, blurry, jpeg artifacts, extra limbs."
-#   },
-#   "scenes": [
-#     {
-#       "scene_number": 1,
-#       "duration_seconds": "[Approximate duration, e.g., 3-5]",
-#       "visual_description": "[A concise, human-readable description of the action and visuals in this scene.]",
-#       "voiceover": "[The corresponding Hindi voiceover for this scene.]",
-#       "positive_prompt": "[A detailed, positive prompt for an AI image generator to create this scene's visual.]",
-#       "negative_prompt": "[A concise negative prompt to refine the AI-generated image.]"
-#     },
-#     {
-#       "scene_number": 2,
-#       "duration_seconds": "[Approximate duration, e.g., 4-6]",
-#       "visual_description": "[A concise, human-readable description of the action and visuals in this scene.]",
-#       "voiceover": "[The corresponding Hindi voiceover for this scene.]",
-#       "positive_prompt": "[A detailed, positive prompt for an AI image generator to create this scene's visual.]",
-#       "negative_prompt": "[A concise negative prompt to refine the AI-generated image.]"
-#     }
-#     //... continue with additional scenes as needed to tell the story within 60 seconds.
-#   ]
-# }
-# ```
-# EOF
+#       "role": "You are a creative strategist and scriptwriter specializing in viral YouTube Shorts (≤ 60 s). Your craft is converting Hindu-mythology or Indian-history epics into fast-paced, emotionally charged, visually spectacular shorts for a modern Hindi-speaking audience. Guiding Principles for Viral Content1.  The Hook (0-3 s): Start with a visual or rhetorical jolt that freezes the scroller.2.  Narrative Pacing: Clear setup → conflict/climax → resolution/moral. Every cut must propel the viewer forward.3.  Emotional Core: Choose ONE dominant feeling (awe, devotion, betrayal, sacrifice, wonder) and amplify it.4.  Visual Storytelling: Think like a veteran cinematographer—specify camera moves, lighting, colour mood, and texture.",
+#       "prompt": " Technical Constraints (Updated)-  Scene Lengths: Generator accepts only 5 s or 10 s clips. Prefer 10 s, but total runtime must stay ≤ 30 s.-  Dynamic Shot Tags (No Curly Braces):     – Use square brackets only (e.g. [Wide Shot], [Low-Angle Hero]).  – Inside one positive_prompt, you may chain multiple shot tags to reflect rapid camera changes within the same scene.     – Syntax Rule: Shot tag first, then action. Example: [Wide Shot] Dev-Asur armies pull Vasuki. [Low-Angle Hero] Vishnu-Kurma surfaces beneath Mandara.     – Never end a positive_prompt with a dangling shot tag; every tag must precede its descriptive fragment.-  Negatives: Keep the global negative list; add scene-specific tweaks as required. Required Output: Return one clean JSON object only (no extra commentary) with the schema below, ready to be filled for any story. JSON Schema: {  \"topic\": \"[Any viral Indian / Hindu mythological story]\",  \"title\": \"[Start with emojis, punchy Hindi title | English translation]\",  \"hashtags\": [    \"[Blend of Hindi + English hashtags]\"  ],  \"summary\": \"[1-2 line Hindi summary]\",  \"master_prompt_context\": {    \"positive_prefix\": \"Epic cinematic shot for a YouTube Short, hyper-realistic 8K, cinematic fantasy art style influenced by Indian masters, dramatic lighting, rich textures, divine aura, intense emotions, shallow depth of field.\",    \"negative_prefix\": \"Avoid: cartoon, anime, 3D render, plastic look, watermark, text, signature, modern elements, bad anatomy, distorted faces, blurry, jpeg artifacts, extra limbs.\"  },  \"scenes\": [    {      \"scene_number\": 1,      \"duration_seconds\": \"[5 or 10]\",      \"visual_description\": \"[≤20-word scene summary]\",      \"voiceover\": \"[Hindi VO for Scene 1]\",      \"positive_prompt\": \"[SHOT] Fragment one. [SHOT] Fragment two. [SHOT] Fragment three.\",      \"negative_prompt\": \"[Concise negatives]\"    },    {      \"scene_number\": 2,      \"duration_seconds\": \"[5 or 10]\",      \"visual_description\": \"[≤20-word scene summary]\",      \"voiceover\": \"[Hindi VO for Scene 2]\",      \"positive_prompt\": \"[SHOT] Fragment one. [SHOT] Fragment two. [SHOT] Fragment three.\",      \"negative_prompt\": \"[Concise negatives]\"    }    // …add a third scene if needed; keep cumulative duration ≤ 30 s.  ]}",
+#       "type": "short"
 #     })
 #   }
 # }
