@@ -49,7 +49,7 @@ module "lambda" {
 module "scheduler" {
   source                     = "./modules/scheduler"
   request_script_lambda_arn  = module.lambda.request_script_invoke_arn
-  request_script_lambda_role = module.iam.lambda_role_arn
+  request_script_lambda_role = module.iam.scheduler_role_arn
 }
 
 # Data sources

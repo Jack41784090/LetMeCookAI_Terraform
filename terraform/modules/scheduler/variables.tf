@@ -4,7 +4,7 @@ variable "request_script_lambda_arn" {
 }
 
 variable "request_script_lambda_role" {
-  description = "The arn of the role assumed for the lambda execution"
+  description = "The ARN of the EventBridge Scheduler role to invoke the Lambda function"
   type        = string
 }
 
