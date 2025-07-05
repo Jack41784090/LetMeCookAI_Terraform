@@ -146,7 +146,7 @@ def generate_ai_content(prompt: str, role: str, type_param: str) -> str:
     
     try:
         response = client.chat.completions.create(
-            model="deepseek-chat",
+            model="deepseek-reasoner",
             messages=[
                 {"role": "system", "content": role},
                 {"role": "user", "content": prompt}
