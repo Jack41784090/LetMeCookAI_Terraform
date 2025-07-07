@@ -480,18 +480,18 @@ def process_short_video(video_files: List[Dict[str, Any]], job_id: str) -> str:
     try:
         logger.info(f"Processing short video with {len(video_files)} video files")
         
-        # Download the specific MP3 file
-        mp3_url = "https://letmecook-ai-generated-videos.s3.us-east-2.amazonaws.com/Keejo+Kesari+Ke+Laal+-+cut.mp3"
+        # Download the specific MP3 file from S3
+        mp3_bucket = "letmecook-ai-generated-videos"
+        mp3_key = "Keejo Kesari Ke Laal - cut.mp3"  # URL decoded version
         mp3_local_path = f"/tmp/background_music_{job_id}.mp3"
         
-        logger.info(f"Downloading background music from: {mp3_url}")
-        response = requests.get(mp3_url)
-        response.raise_for_status()
-        
-        with open(mp3_local_path, 'wb') as f:
-            f.write(response.content)
-        
-        logger.info(f"Background music downloaded to: {mp3_local_path}")
+        logger.info(f"Downloading background music from S3: s3://{mp3_bucket}/{mp3_key}")
+        try:
+            s3.download_file(mp3_bucket, mp3_key, mp3_local_path)
+            logger.info(f"Background music downloaded to: {mp3_local_path}")
+        except Exception as e:
+            logger.error(f"Failed to download MP3 from S3: {str(e)}")
+            raise
         
         if len(video_files) == 1:
             # Single video file - compose directly with MP3
