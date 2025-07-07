@@ -991,37 +991,22 @@ def trigger_next_step(job_id: str, video_type: str, ai_response: str) -> None:
             except Exception as e:
                 logger.warning(f"Failed to extract response payload for job {job_id}: {str(e)}")
 
-        if video_type == "short":
-            # Direct YouTube upload for shorts
-            function_name = os.environ.get("YOUTUBE_UPLOAD_FUNCTION_NAME")
-            if function_name:
-                response_payload["video_type"] = "short"
-                lambda_client.invoke(
-                    FunctionName=function_name,
-                    InvocationType="Event",
-                    Payload=json.dumps(response_payload),
-                )
-                logger.info(f"Triggered YouTube upload for shorts job {job_id}", extra={
-                    "job_id": job_id,
-                    "function_name": function_name
-                })
-            else:
-                logger.warning(f"YOUTUBE_UPLOAD_FUNCTION_NAME not configured - cannot trigger upload for job {job_id}")
+        # Trigger composition for both regular videos and shorts
+        function_name = os.environ.get("COMPOSE_FUNCTION_NAME")
+        if function_name:
+            response_payload["video_type"] = video_type
+            lambda_client.invoke(
+                FunctionName=function_name,
+                InvocationType="Event",
+                Payload=json.dumps(response_payload),
+            )
+            logger.info(f"Triggered composition for {video_type} job {job_id}", extra={
+                "job_id": job_id,
+                "video_type": video_type,
+                "function_name": function_name
+            })
         else:
-            # Composition for regular videos
-            function_name = os.environ.get("COMPOSE_FUNCTION_NAME")
-            if function_name:
-                lambda_client.invoke(
-                    FunctionName=function_name,
-                    InvocationType="Event",
-                    Payload=json.dumps(response_payload),
-                )
-                logger.info(f"Triggered composition for job {job_id}", extra={
-                    "job_id": job_id,
-                    "function_name": function_name
-                })
-            else:
-                logger.warning(f"COMPOSE_FUNCTION_NAME not configured - cannot trigger composition for job {job_id}")
+            logger.warning(f"COMPOSE_FUNCTION_NAME not configured - cannot trigger composition for job {job_id}")
 
     except Exception as e:
         logger.error(f"Error triggering next step for job {job_id}: {str(e)}", extra={

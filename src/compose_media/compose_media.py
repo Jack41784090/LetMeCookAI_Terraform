@@ -49,10 +49,12 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
         # Extract response object from event if present
         response_obj = event.get("response", {})
+        video_type = event.get("video_type", "regular")
 
         logger.info(f"Starting composition for job: {job_id}")
         if response_obj:
             logger.info(f"Received response object with title: {response_obj.get('title', 'N/A')}")
+        logger.info(f"Video type: {video_type}")
 
         # Check if both audio and video are complete
         if not check_both_ready(job_id):
@@ -66,14 +68,14 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         update_job_coordination_status(job_id, "composition_status", "in_progress")
 
         # Download and compose media
-        composed_video_url = compose_media(job_id)
+        composed_video_url = compose_media(job_id, video_type)
 
         # Update final status
         update_job_coordination_status(job_id, "composition_status", "complete")
         update_job_coordination_status(job_id, "final_video_url", composed_video_url)
 
-        # Trigger YouTube upload for regular videos with response object
-        trigger_youtube_upload(job_id, response_obj)
+        # Trigger YouTube upload for all videos with response object
+        trigger_youtube_upload(job_id, response_obj, video_type)
 
         logger.info(
             f"Successfully composed video for job {job_id}: {composed_video_url}"
@@ -152,26 +154,37 @@ def update_job_coordination_status(job_id: str, field: str, value: str):
         logger.error(f"Error updating job status: {str(e)}")
 
 
-def compose_media(job_id: str) -> str:
+def compose_media(job_id: str, video_type: str = "regular") -> str:
     """Download audio and video files, compose them, and upload result"""
     try:
-        # Download audio and video files
-        audio_files = download_media_files(job_id, "generated-audio")
+        # Download video files
         video_files = download_media_files(job_id, "generated-videos")
-
-        if not audio_files or not video_files:
-            raise ValueError(
-                "Missing audio or video files"
-            )  # Sort files by scene number
-        audio_files.sort(key=lambda x: x["scene_number"])
+        
+        if not video_files:
+            raise ValueError("Missing video files")
+        
+        # Sort video files by scene number
         video_files.sort(key=lambda x: x["scene_number"])
-
-        logger.info(
-            f"Found {len(audio_files)} audio files and {len(video_files)} video files"
-        )
-
-        # Process scenes one at a time to minimize memory usage
-        final_video_path = process_scenes_sequentially(audio_files, video_files, job_id)
+        
+        if video_type == "short":
+            logger.info(f"Processing short video for job {job_id}")
+            # For shorts, use the specific MP3 URL instead of generated audio
+            final_video_path = process_short_video(video_files, job_id)
+        else:
+            logger.info(f"Processing regular video for job {job_id}")
+            # Download audio files for regular videos
+            audio_files = download_media_files(job_id, "generated-audio")
+            
+            if not audio_files:
+                raise ValueError("Missing audio files")
+            
+            # Sort audio files by scene number
+            audio_files.sort(key=lambda x: x["scene_number"])
+            
+            logger.info(f"Found {len(audio_files)} audio files and {len(video_files)} video files")
+            
+            # Process scenes sequentially to minimize memory usage
+            final_video_path = process_scenes_sequentially(audio_files, video_files, job_id)
 
         # Upload final video to S3
         final_video_url = upload_final_video(final_video_path, job_id)
@@ -180,7 +193,7 @@ def compose_media(job_id: str) -> str:
         cleanup_temp_files([final_video_path])
 
         # Cleanup downloaded source files
-        cleanup_temp_files([f["local_path"] for f in audio_files + video_files])
+        cleanup_temp_files([f["local_path"] for f in video_files])
 
         return final_video_url
 
@@ -432,7 +445,7 @@ def concatenate_from_file(concat_file: str, output_path: str) -> None:
         raise
 
 
-def trigger_youtube_upload(job_id: str, response_obj: Dict[str, Any] | None = None) -> None:
+def trigger_youtube_upload(job_id: str, response_obj: Dict[str, Any] | None = None, video_type: str = "regular") -> None:
     """Trigger YouTube upload Lambda function for composed video"""
     try:
         youtube_upload_function_name = os.environ.get("YOUTUBE_UPLOAD_FUNCTION_NAME")
@@ -442,7 +455,7 @@ def trigger_youtube_upload(job_id: str, response_obj: Dict[str, Any] | None = No
 
         payload: Dict[str, Any] = {
             "job_id": job_id,
-            "video_type": "regular"
+            "video_type": video_type
         }
         
         # Add response object if available
@@ -460,3 +473,136 @@ def trigger_youtube_upload(job_id: str, response_obj: Dict[str, Any] | None = No
         
     except Exception as e:
         logger.error(f"Failed to trigger YouTube upload for job {job_id}: {str(e)}")
+
+
+def process_short_video(video_files: List[Dict[str, Any]], job_id: str) -> str:
+    """Process short video by concatenating video files and adding specific background music"""
+    try:
+        logger.info(f"Processing short video with {len(video_files)} video files")
+        
+        # Download the specific MP3 file
+        mp3_url = "https://letmecook-ai-generated-videos.s3.us-east-2.amazonaws.com/Keejo+Kesari+Ke+Laal+-+cut.mp3"
+        mp3_local_path = f"/tmp/background_music_{job_id}.mp3"
+        
+        logger.info(f"Downloading background music from: {mp3_url}")
+        response = requests.get(mp3_url)
+        response.raise_for_status()
+        
+        with open(mp3_local_path, 'wb') as f:
+            f.write(response.content)
+        
+        logger.info(f"Background music downloaded to: {mp3_local_path}")
+        
+        if len(video_files) == 1:
+            # Single video file - compose directly with MP3
+            logger.info("Single video file detected, composing directly with background music")
+            final_video_path = f"/tmp/final_short_video_{job_id}.mp4"
+            compose_video_with_mp3(video_files[0]["local_path"], mp3_local_path, final_video_path)
+        else:
+            # Multiple video files - concatenate first, then add MP3
+            logger.info(f"Multiple video files detected, concatenating {len(video_files)} files")
+            
+            # Create concat file for video files
+            concat_file = f"/tmp/video_concat_list_{job_id}.txt"
+            with open(concat_file, "w") as f:
+                for video_file in video_files:
+                    f.write(f"file '{video_file['local_path']}'\n")
+            
+            # Concatenate video files first
+            concatenated_video_path = f"/tmp/concatenated_video_{job_id}.mp4"
+            concatenate_videos_from_file(concat_file, concatenated_video_path)
+            
+            # Now compose with MP3
+            final_video_path = f"/tmp/final_short_video_{job_id}.mp4"
+            compose_video_with_mp3(concatenated_video_path, mp3_local_path, final_video_path)
+            
+            # Cleanup intermediate files
+            cleanup_temp_files([concatenated_video_path, concat_file])
+        
+        # Cleanup MP3 file
+        cleanup_temp_files([mp3_local_path])
+        
+        return final_video_path
+        
+    except Exception as e:
+        logger.error(f"Error processing short video: {str(e)}")
+        raise
+
+
+def compose_video_with_mp3(video_path: str, mp3_path: str, output_path: str) -> None:
+    """Compose video with MP3 background music, cutting off trailing audio"""
+    try:
+        # Use FFmpeg from layer if available, fallback to system ffmpeg
+        ffmpeg_path = (
+            "/opt/bin/ffmpeg" if os.path.exists("/opt/bin/ffmpeg") else "ffmpeg"
+        )
+        
+        cmd = [
+            ffmpeg_path,
+            "-y",
+            "-i", video_path,  # Video input
+            "-i", mp3_path,    # Audio input (MP3)
+            "-c:v", "copy",    # Copy video stream (no re-encoding)
+            "-c:a", "aac",     # Audio codec
+            "-map", "0:v:0",   # Map video stream from first input
+            "-map", "1:a:0",   # Map audio stream from second input (MP3)
+            "-shortest",       # Use shortest duration (video length)
+            "-threads", "1",   # Limit threads to reduce memory usage
+            output_path,
+        ]
+        
+        logger.info(f"Composing video with MP3: {' '.join(cmd)}")
+        
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+        
+        if result.returncode != 0:
+            logger.error(f"FFmpeg error: {result.stderr}")
+            raise RuntimeError(f"FFmpeg failed with return code {result.returncode}")
+        
+        if not os.path.exists(output_path):
+            raise RuntimeError(f"Output file was not created: {output_path}")
+        
+        logger.info(f"Successfully composed video with MP3: {output_path}")
+        
+    except Exception as e:
+        logger.error(f"Error composing video with MP3: {str(e)}")
+        raise
+
+
+def concatenate_videos_from_file(concat_file: str, output_path: str) -> None:
+    """Concatenate video files using a concat file"""
+    try:
+        # Use FFmpeg from layer if available, fallback to system ffmpeg
+        ffmpeg_path = (
+            "/opt/bin/ffmpeg" if os.path.exists("/opt/bin/ffmpeg") else "ffmpeg"
+        )
+        
+        cmd = [
+            ffmpeg_path,
+            "-y",
+            "-f", "concat",
+            "-safe", "0",
+            "-i", concat_file,
+            "-c", "copy",  # Copy streams without re-encoding
+            "-threads", "1",  # Limit threads
+            output_path,
+        ]
+        
+        logger.info(f"Concatenating videos with command: {' '.join(cmd)}")
+        
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+        
+        if result.returncode != 0:
+            logger.error(f"FFmpeg concat error: {result.stderr}")
+            raise RuntimeError(
+                f"FFmpeg concat failed with return code {result.returncode}"
+            )
+        
+        if not os.path.exists(output_path):
+            raise RuntimeError(f"Concatenated video was not created: {output_path}")
+        
+        logger.info(f"Successfully concatenated videos to {output_path}")
+        
+    except Exception as e:
+        logger.error(f"Error concatenating videos: {str(e)}")
+        raise
