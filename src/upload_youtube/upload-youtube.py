@@ -159,7 +159,7 @@ def find_video_file(job_id: str, video_type: str) -> str | None:
     if not S3_BUCKET:
         raise ValueError("S3_BUCKET not configured")
     
-    prefix = f"generated-videos/{job_id}/" if video_type == "short" else f"composed-videos/{job_id}/"
+    prefix = f"final-videos/{job_id}/"
     
     try:
         response = s3.list_objects_v2(Bucket=S3_BUCKET, Prefix=prefix)
