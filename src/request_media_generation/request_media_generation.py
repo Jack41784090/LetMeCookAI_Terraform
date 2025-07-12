@@ -1,4 +1,3 @@
-from doctest import master
 import json
 import os
 import boto3
@@ -10,42 +9,9 @@ import requests
 from typing import Any, Dict, List
 from urllib.parse import urlparse
 
-# Configure logging with structured output
+# Simple logging setup
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger()
-logger.setLevel(logging.INFO)
-
-# Create a custom formatter that includes extra fields
-class StructuredFormatter(logging.Formatter):
-    def format(self, record):
-        # Get the base message
-        base_msg = super().format(record)
-        
-        # Add extra fields if they exist
-        extra_fields = {}
-        for key, value in record.__dict__.items():
-            if key not in ['name', 'msg', 'args', 'levelname', 'levelno', 'pathname', 
-                          'filename', 'module', 'lineno', 'funcName', 'created', 
-                          'msecs', 'relativeCreated', 'thread', 'threadName', 
-                          'processName', 'process', 'getMessage', 'exc_info', 
-                          'exc_text', 'stack_info', 'message']:
-                extra_fields[key] = value
-        
-        if extra_fields:
-            import json
-            extra_json = json.dumps(extra_fields, default=str)
-            return f"{base_msg} | EXTRA: {extra_json}"
-        
-        return base_msg
-
-# Apply the formatter to existing handlers
-for handler in logger.handlers:
-    handler.setFormatter(StructuredFormatter())
-
-# If no handlers exist, add one
-if not logger.handlers:
-    handler = logging.StreamHandler()
-    handler.setFormatter(StructuredFormatter())
-    logger.addHandler(handler)
 
 # Initialize AWS clients
 region = "us-east-2"
@@ -62,390 +28,197 @@ JOB_COORDINATION_TABLE = os.environ.get("JOB_COORDINATION_TABLE")
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """Process video and audio generation requests from SQS messages."""
     execution_id = context.aws_request_id if context else "unknown"
-    logger.info(f"Starting media generation lambda execution {execution_id}", extra={
-        "execution_id": execution_id,
-        "event_type": "sqs" if "Records" in event else "direct_invoke"
-    })
+    logger.info(f"Starting execution {execution_id}")
     
     try:
         records = event.get("Records", [{"body": json.dumps(event)}])
         processed, failed = 0, 0
         
-        logger.info(f"Processing {len(records)} record(s)", extra={
-            "execution_id": execution_id,
-            "record_count": len(records)
-        })
-
         for idx, record in enumerate(records):
             try:
                 message = json.loads(record["body"])
-                logger.info(f"Processing record {idx + 1}/{len(records)}", extra={
-                    "execution_id": execution_id,
-                    "record_index": idx,
-                    "message_keys": list(message.keys())
-                })
-                
                 job_id = process_media_request(message)
                 processed += 1
-                logger.info(f"Successfully processed job: {job_id}", extra={
-                    "execution_id": execution_id,
-                    "job_id": job_id,
-                    "record_index": idx
-                })
+                logger.info(f"Successfully processed job: {job_id}")
             except Exception as e:
-                logger.error(f"Failed to process record {idx + 1}: {str(e)}", extra={
-                    "execution_id": execution_id,
-                    "record_index": idx,
-                    "error_type": type(e).__name__
-                }, exc_info=True)
+                logger.error(f"Failed to process record {idx + 1}: {str(e)}")
                 failed += 1
 
-        logger.info(f"Execution {execution_id} completed", extra={
-            "execution_id": execution_id,
-            "processed": processed,
-            "failed": failed,
-            "success_rate": f"{(processed/(processed+failed)*100):.1f}%" if (processed+failed) > 0 else "0%"
-        })
-
+        logger.info(f"Execution completed - processed: {processed}, failed: {failed}")
         return {
             "statusCode": 200,
             "body": json.dumps({"processed": processed, "failed": failed}),
         }
     except Exception as e:
-        logger.error(f"Lambda handler error in execution {execution_id}: {str(e)}", extra={
-            "execution_id": execution_id,
-            "error_type": type(e).__name__
-        }, exc_info=True)
+        logger.error(f"Lambda handler error: {str(e)}")
         return {"statusCode": 500, "body": json.dumps({"error": str(e)})}
 
 
 def process_media_request(message: Dict[str, Any]) -> str:
     """Process a single media generation request."""
-    logger.info("Starting media request processing", extra={
-        "message_keys": list(message.keys()),
-        "message_size": len(str(message))
-    })
-    
-    # Extract and validate required fields
+    # Validate required fields
     prompt = message.get("prompt", "")
     role = message.get("role", "")
     response = message.get("response", "")
     video_type = message.get("type", "")
 
     if not all([prompt, role, response, video_type]):
-        missing_fields = [k for k, v in {"prompt": prompt, "role": role, "response": response, "type": video_type}.items() if not v]
-        logger.error(f"Missing required fields: {missing_fields}")
-        raise ValueError(f"Missing required fields: {', '.join(missing_fields)}")
-
-    logger.info("Request parameters validated", extra={
-        "video_type": video_type,
-        "prompt_length": len(prompt),
-        "role": role,
-        "response_length": len(str(response))
-    })
+        missing = [k for k, v in {"prompt": prompt, "role": role, "response": response, "type": video_type}.items() if not v]
+        raise ValueError(f"Missing required fields: {', '.join(missing)}")
 
     # Extract scenes and generate job ID
     scenes = extract_scenes(response)
     if not scenes:
-        logger.error("No scenes found in AI response")
         raise ValueError("No scenes found in AI response")
 
     job_id = f"job_{int(time.time())}_{hash(prompt) % 10000}"
-    
-    logger.info(f"Generated job ID: {job_id}", extra={
-        "job_id": job_id,
-        "scene_count": len(scenes),
-        "video_type": video_type
-    })
+    logger.info(f"Processing job {job_id} with {len(scenes)} scenes")
 
     # Initialize job coordination
     initialize_job(job_id, prompt, role, video_type, str(response))
 
+    # Extract master prompt
+    master_prompt = get_master_prompt(response)
+    
     # Generate media
-    try:
-        # Parse response to extract master_prompt_context
-        if isinstance(response, str):
-            logger.debug("Parsing response string for master prompt context")
-            cleaned_response = response.strip().replace("```json", "").replace("```", "")
-            parsed_response = json.loads(cleaned_response)
-        else:
-            parsed_response = response
-            
-        master_prompt = parsed_response.get("master_prompt_context")
-        if not master_prompt:
-            logger.error("Master prompt context missing in response", extra={"job_id": job_id})
-            raise ValueError("Master prompt context missing in response")
-        master_positive_prompt = master_prompt.get("positive_prefix")
-        if not master_positive_prompt:
-            logger.error("Master positive prompt missing in response", extra={"job_id": job_id})
-            raise ValueError("Master positive prompt missing in response")
-    except (json.JSONDecodeError, AttributeError) as e:
-        logger.error(f"Failed to parse response for master prompt context: {str(e)}", extra={
-            "job_id": job_id,
-            "error_type": type(e).__name__
-        })
-        raise ValueError(f"Invalid response format for master prompt extraction: {str(e)}")
-    
-    logger.info(f"Starting media generation for job {job_id}", extra={
-        "job_id": job_id,
-        "master_prompt_length": len(master_positive_prompt)
-    })
-    
     video_results, audio_results = asyncio.run(
-        generate_media(scenes, job_id, video_type, master_positive_prompt)
+        generate_media(scenes, job_id, video_type, master_prompt)
     )
 
-    # Store results and update status
+    # Store results and complete job
     store_results(video_results, audio_results, prompt, role, str(response), job_id)
     complete_job(job_id, video_type, str(response))
-
-    logger.info(f"Media request processing completed for job {job_id}", extra={
-        "job_id": job_id,
-        "video_results_count": len(video_results),
-        "audio_results_count": len(audio_results)
-    })
 
     return job_id
 
 
 def extract_scenes(response) -> List[Dict[str, Any]]:
     """Extract scene descriptions from AI response."""
-    logger.debug("Starting scene extraction from AI response")
-    
     try:
         # Parse response if it's a string
         if isinstance(response, str):
-            logger.debug("Parsing string response to JSON")
-            # Clean markdown formatting
             cleaned = response.strip().replace("```json", "").replace("```", "")
             parsed = json.loads(cleaned)
         else:
-            logger.debug("Response is already parsed object")
             parsed = response
 
-        # Extract scenes from structured format
+        # Extract scenes
         if isinstance(parsed, dict) and "scenes" in parsed:
             raw_scenes = parsed["scenes"]
-            logger.info(f"Found {len(raw_scenes)} scenes in response")
-            
             scenes = []
+            
             for idx, scene in enumerate(raw_scenes):
                 scene_data = {
                     "scene_number": scene.get("scene_number", idx + 1),
                     "duration": scene.get("duration_seconds", 10),
                     "visual_description": scene.get("visual_description", ""),
                     "voiceover": scene.get("voiceover", ""),
-                    "positive_prompt": scene.get(
-                        "positive_prompt", scene.get("visual_description", "")
-                    ),
+                    "positive_prompt": scene.get("positive_prompt", scene.get("visual_description", "")),
                     "negative_prompt": scene.get("negative_prompt", ""),
-                    "master_prompt_context": parsed.get(
-                        "master_prompt_context", {}
-                    ),
+                    "master_prompt_context": parsed.get("master_prompt_context", {}),
                 }
                 scenes.append(scene_data)
-                
-                logger.debug(f"Extracted scene {idx + 1}", extra={
-                    "scene_number": scene_data["scene_number"],
-                    "duration": scene_data["duration"],
-                    "has_voiceover": bool(scene_data["voiceover"]),
-                    "visual_desc_length": len(scene_data["visual_description"])
-                })
             
-            logger.info(f"Successfully extracted {len(scenes)} scenes")
             return scenes
         else:
-            logger.error("Response missing 'scenes' key", extra={
-                "response_keys": list(parsed.keys()) if isinstance(parsed, dict) else "not_dict"
-            })
             raise ValueError("Response missing 'scenes' key")
 
     except (json.JSONDecodeError, ValueError) as e:
-        logger.error(f"Error extracting scenes: {str(e)}", extra={
-            "error_type": type(e).__name__,
-            "response_type": type(response).__name__
-        })
+        logger.error(f"Error extracting scenes: {str(e)}")
         raise
 
 
-async def generate_media(
-    scenes: List[Dict[str, Any]], job_id: str, video_type: str, master_prompt: str
-) -> tuple:
+def get_master_prompt(response) -> str:
+    """Extract master prompt from response."""
+    try:
+        if isinstance(response, str):
+            cleaned = response.strip().replace("```json", "").replace("```", "")
+            parsed = json.loads(cleaned)
+        else:
+            parsed = response
+            
+        master_prompt = parsed.get("master_prompt_context", {}).get("positive_prefix", "")
+        if not master_prompt:
+            raise ValueError("Master positive prompt missing")
+        return master_prompt
+    except Exception as e:
+        logger.error(f"Failed to extract master prompt: {str(e)}")
+        raise
+
+
+async def generate_media(scenes: List[Dict[str, Any]], job_id: str, video_type: str, master_prompt: str) -> tuple:
     """Generate video and audio for all scenes in parallel."""
-    logger.info(f"Starting media generation for job: {job_id}", extra={
-        "job_id": job_id,
-        "scene_count": len(scenes),
-        "video_type": video_type,
-        "master_prompt_length": len(master_prompt)
-    })
+    logger.info(f"Starting media generation for job {job_id}")
 
-    # Create video generation tasks
-    video_tasks = [
-        generate_video(scene, i, job_id, video_type, master_prompt) for i, scene in enumerate(scenes)
-    ]
+    # Create video tasks
+    video_tasks = [generate_video(scene, i, job_id, video_type, master_prompt) for i, scene in enumerate(scenes)]
 
-    # For shorts, skip audio generation
+    # Skip audio for shorts
     if video_type == "short":
-        logger.info(f"Processing shorts - skipping audio generation for job {job_id}")
-        start_time = time.time()
         video_results = await asyncio.gather(*video_tasks, return_exceptions=True)
-        generation_time = time.time() - start_time
-        
-        logger.info(f"Video generation completed for job {job_id}", extra={
-            "job_id": job_id,
-            "generation_time_seconds": round(generation_time, 2),
-            "video_count": len(video_results)
-        })
         return process_results(video_results, scenes), []
 
-    # For regular videos, generate both video and audio
-    logger.info(f"Processing regular video - generating both video and audio for job {job_id}")
+    # Generate both video and audio for regular videos
     audio_tasks = [generate_audio(scene, i, job_id) for i, scene in enumerate(scenes)]
-
-    start_time = time.time()
     video_results, audio_results = await asyncio.gather(
         asyncio.gather(*video_tasks, return_exceptions=True),
         asyncio.gather(*audio_tasks, return_exceptions=True),
     )
-    generation_time = time.time() - start_time
-    
-    logger.info(f"Media generation completed for job {job_id}", extra={
-        "job_id": job_id,
-        "generation_time_seconds": round(generation_time, 2),
-        "video_count": len(video_results),
-        "audio_count": len(audio_results)
-    })
 
-    return process_results(video_results, scenes), process_results(
-        audio_results, scenes
-    )
+    return process_results(video_results, scenes), process_results(audio_results, scenes)
 
 
-def process_results(
-    results: List, scenes: List[Dict[str, Any]]
-) -> List[Dict[str, Any]]:
+def process_results(results: List, scenes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Process generation results and handle exceptions."""
     processed = []
-    success_count = 0
-    failure_count = 0
-    
     for i, result in enumerate(results):
         if isinstance(result, Exception):
-            failure_count += 1
-            logger.error(f"Generation failed for scene {i+1}: {str(result)}", extra={
+            logger.error(f"Generation failed for scene {i+1}: {str(result)}")
+            processed.append({
                 "scene_index": i,
-                "error_type": type(result).__name__
+                "scene_number": scenes[i].get("scene_number", i + 1),
+                "status": "failed",
+                "error": str(result),
             })
-            scene = scenes[i]
-            processed.append(
-                {
-                    "scene_index": i,
-                    "scene_number": scene.get("scene_number", i + 1),
-                    "status": "failed",
-                    "error": str(result),
-                }
-            )
         else:
-            success_count += 1
             processed.append(result)
-    
-    logger.info(f"Result processing completed", extra={
-        "total_scenes": len(results),
-        "successful": success_count,
-        "failed": failure_count,
-        "success_rate": f"{(success_count/len(results)*100):.1f}%" if results else "0%"
-    })
-    
     return processed
 
 
-async def generate_video(
-    scene: Dict[str, Any], scene_index: int, job_id: str, video_type: str, master_prompt: str
-) -> Dict[str, Any]:
+async def generate_video(scene: Dict[str, Any], scene_index: int, job_id: str, video_type: str, master_prompt: str) -> Dict[str, Any]:
     """Generate a single video asynchronously."""
     scene_number = scene.get("scene_number", scene_index + 1)
     
-    logger.info(f"Starting video generation for scene {scene_number}", extra={
-        "job_id": job_id,
-        "scene_number": scene_number,
-        "scene_index": scene_index,
-        "video_type": video_type
-    })
-    
     try:
-        visual_desc = scene.get("visual_description", "")
-        start_time = time.time()
-
-        # Prepare video request
         video_request = get_video_request(scene, video_type, master_prompt)
-        
-        logger.debug(f"Video request prepared for scene {scene_number}", extra={
-            "job_id": job_id,
-            "scene_number": scene_number,
-            "model": video_request.get("model"),
-            "duration": video_request.get("duration"),
-            "aspect_ratio": video_request.get("aspect_ratio")
-        })
-
-        # Generate video
         video_result = await call_video_api(video_request, job_id, scene_number)
-        generation_time = time.time() - start_time
         
-        is_success = video_result.get("success", False)
-        
-        logger.info(f"Video generation {'completed' if is_success else 'failed'} for scene {scene_number}", extra={
-            "job_id": job_id,
-            "scene_number": scene_number,
-            "generation_time_seconds": round(generation_time, 2),
-            "success": is_success,
-            "has_s3_url": bool(video_result.get("s3_url"))
-        })
-
         return {
             "scene_index": scene_index,
             "scene_number": scene_number,
-            "scene_description": visual_desc,
+            "scene_description": scene.get("visual_description", ""),
             "voiceover": scene.get("voiceover", ""),
             "duration": scene.get("duration"),
             "video_result": video_result,
-            "status": "success" if is_success else "failed",
-            "generation_time": round(generation_time, 2)
+            "status": "success" if video_result.get("success") else "failed",
         }
     except Exception as e:
-        logger.error(f"Video generation failed for scene {scene_number}: {str(e)}", extra={
-            "job_id": job_id,
-            "scene_number": scene_number,
-            "scene_index": scene_index,
-            "error_type": type(e).__name__
-        }, exc_info=True)
+        logger.error(f"Video generation failed for scene {scene_number}: {str(e)}")
         return {
             "scene_index": scene_index,
-            "scene_number": scene.get("scene_number", scene_index + 1),
+            "scene_number": scene_number,
             "status": "failed",
             "error": str(e),
         }
 
 
-async def generate_audio(
-    scene: Dict[str, Any], scene_index: int, job_id: str
-) -> Dict[str, Any]:
+async def generate_audio(scene: Dict[str, Any], scene_index: int, job_id: str) -> Dict[str, Any]:
     """Generate a single audio track asynchronously."""
     scene_number = scene.get("scene_number", scene_index + 1)
     voiceover_text = scene.get("voiceover", "")
     
-    logger.info(f"Starting audio generation for scene {scene_number}", extra={
-        "job_id": job_id,
-        "scene_number": scene_number,
-        "scene_index": scene_index,
-        "voiceover_length": len(voiceover_text)
-    })
-    
     try:
         if not voiceover_text.strip():
-            logger.info(f"Skipping audio generation for scene {scene_number} - no voiceover text", extra={
-                "job_id": job_id,
-                "scene_number": scene_number
-            })
             return {
                 "scene_index": scene_index,
                 "scene_number": scene_number,
@@ -453,55 +226,26 @@ async def generate_audio(
                 "message": "No voiceover text",
             }
 
-        start_time = time.time()
-
-        # Prepare audio request
         audio_request = {
             "prompt": voiceover_text,
             "voice": get_voice_setting(scene),
             "speed": get_speed_setting(scene),
         }
         
-        logger.debug(f"Audio request prepared for scene {scene_number}", extra={
-            "job_id": job_id,
-            "scene_number": scene_number,
-            "voice": audio_request["voice"],
-            "speed": audio_request["speed"],
-            "text_length": len(voiceover_text)
-        })
-
-        # Generate audio
         audio_result = await call_audio_api(audio_request, job_id, scene_number)
-        generation_time = time.time() - start_time
         
-        is_success = audio_result.get("success", False)
-        
-        logger.info(f"Audio generation {'completed' if is_success else 'failed'} for scene {scene_number}", extra={
-            "job_id": job_id,
-            "scene_number": scene_number,
-            "generation_time_seconds": round(generation_time, 2),
-            "success": is_success,
-            "has_s3_url": bool(audio_result.get("s3_url"))
-        })
-
         return {
             "scene_index": scene_index,
             "scene_number": scene_number,
             "voiceover_text": voiceover_text,
             "audio_result": audio_result,
-            "status": "success" if is_success else "failed",
-            "generation_time": round(generation_time, 2)
+            "status": "success" if audio_result.get("success") else "failed",
         }
     except Exception as e:
-        logger.error(f"Audio generation failed for scene {scene_number}: {str(e)}", extra={
-            "job_id": job_id,
-            "scene_number": scene_number,
-            "scene_index": scene_index,
-            "error_type": type(e).__name__
-        }, exc_info=True)
+        logger.error(f"Audio generation failed for scene {scene_number}: {str(e)}")
         return {
             "scene_index": scene_index,
-            "scene_number": scene.get("scene_number", scene_index + 1),
+            "scene_number": scene_number,
             "status": "failed",
             "error": str(e),
         }
