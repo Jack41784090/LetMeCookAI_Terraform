@@ -358,67 +358,122 @@ def process_short_video(video_files: List[Dict[str, Any]], job_id: str) -> str:
     endscreen_path = f"/tmp/subscribe_and_like_{job_id}.mp4"
     s3.download_file(SUBSCRIBE_AND_LIKE_ANIMATION["bucket"], SUBSCRIBE_AND_LIKE_ANIMATION["key"], endscreen_path)
     
-    # main video concatenation
+    # First, concatenate main video files if multiple
     if len(video_files) > 1:
         concat_file = f"/tmp/video_concat_list_{job_id}.txt"
         with open(concat_file, "w") as f:
             for video_file in video_files:
                 f.write(f"file '{video_file['local_path']}'\n")
 
-        final_video_path = f"/tmp/concatenated_video_{job_id}.mp4"
-        run_ffmpeg_command(
-            [
-                FFMPEG_PATH,
-                "-y",
-                "-f", "concat",
-                "-safe", "0",
-                "-i", concat_file,
-                "-c", "copy",
-                "-threads", "1",
-                final_video_path,
-            ]
-        )
+        main_video_path = f"/tmp/concatenated_video_{job_id}.mp4"
+        run_ffmpeg_command([
+            FFMPEG_PATH,
+            "-y",
+            "-f", "concat",
+            "-safe", "0",
+            "-i", concat_file,
+            "-c", "copy",
+            "-threads", "1",
+            main_video_path,
+        ])
+        cleanup_temp_files([concat_file])
     else:
-        final_video_path = video_files[0]["local_path"]
+        main_video_path = video_files[0]["local_path"]
     
-    # Create concat file for main video + endscreen
-    endscreen_concat_file = f"/tmp/endscreen_concat_{job_id}.txt"
-    with open(endscreen_concat_file, "w") as f:
-        f.write(f"file '{final_video_path}'\n")
-        f.write(f"file '{endscreen_path}'\n")
+    # Add background music to main video first
+    main_video_with_music = f"/tmp/main_video_with_music_{job_id}.mp4"
+    run_ffmpeg_command([
+        FFMPEG_PATH,
+        "-y",
+        "-i", main_video_path,
+        "-i", mp3_path,
+        "-c:v", "copy",
+        "-c:a", "aac",
+        "-map", "0:v:0",
+        "-map", "1:a:0",
+        "-shortest",
+        "-threads", "1",
+        main_video_with_music,
+    ])
     
+    # Convert main video with music to TS format for smooth concatenation
+    main_video_ts = f"/tmp/main_video_with_music_{job_id}.ts"
+    run_ffmpeg_command([
+        FFMPEG_PATH,
+        "-y",
+        "-i", main_video_with_music,
+        "-c:v", "copy",
+        "-c:a", "aac",  # Re-encode audio to ensure compatibility
+        "-ar", "44100",  # Set explicit sample rate
+        "-ac", "2",      # Set stereo channels
+        "-b:a", "128k",  # Set audio bitrate
+        "-bsf:v", "h264_mp4toannexb",
+        "-f", "mpegts",
+        main_video_ts,
+    ])
+    
+    # Convert endscreen to TS format
+    endscreen_ts = f"/tmp/endscreen_{job_id}.ts"
+    run_ffmpeg_command([
+        FFMPEG_PATH,
+        "-y",
+        "-i", endscreen_path,
+        "-c:v", "copy",
+        "-c:a", "aac",   # Re-encode audio to match main video
+        "-ar", "44100",  # Set explicit sample rate
+        "-ac", "2",      # Set stereo channels
+        "-b:a", "128k",  # Set audio bitrate
+        "-bsf:v", "h264_mp4toannexb", 
+        "-f", "mpegts",
+        endscreen_ts,
+    ])
+    
+    # Concatenate TS files directly (no concat file needed)
+    video_with_endscreen_ts = f"/tmp/video_with_endscreen_{job_id}.ts"
+    run_ffmpeg_command([
+        FFMPEG_PATH,
+        "-y",
+        "-i", f"concat:{main_video_ts}|{endscreen_ts}",
+        "-c", "copy",
+        "-threads", "1",
+        video_with_endscreen_ts,
+    ])
+    
+    # Convert back to MP4 with proper audio parameters
+    video_with_endscreen_no_music = f"/tmp/video_with_endscreen_no_music_{job_id}.mp4"
+    run_ffmpeg_command([
+        FFMPEG_PATH,
+        "-y",
+        "-i", video_with_endscreen_ts,
+        "-c:v", "copy",
+        "-c:a", "aac",   # Re-encode audio for MP4 compatibility
+        "-ar", "44100",  # Ensure sample rate is set
+        "-ac", "2",      # Ensure stereo
+        "-threads", "1",
+        video_with_endscreen_no_music,
+    ])
+    
+    # Finally, add background music to the entire video (main + endscreen)
     final_video_with_endscreen = f"/tmp/final_video_with_endscreen_{job_id}.mp4"
     run_ffmpeg_command([
         FFMPEG_PATH,
         "-y",
-        "-f", "concat",
-        "-safe", "0", 
-        "-i", endscreen_concat_file,
-        "-c", "copy",
+        "-i", video_with_endscreen_no_music,
+        "-i", mp3_path,
+        "-c:v", "copy",
+        "-c:a", "aac",
+        "-map", "0:v:0",
+        "-map", "1:a:0",
+        "-shortest",  # Music will cover both main video and endscreen
         "-threads", "1",
         final_video_with_endscreen,
     ])
     
-    # Add background music
-    final_video_with_music = f"/tmp/final_video_with_music_{job_id}.mp4"
-    run_ffmpeg_command(
-        [
-            FFMPEG_PATH,
-            "-y",
-            "-i", final_video_with_endscreen,
-            "-i", mp3_path,
-            "-c:v", "copy",
-            "-c:a", "aac",
-            "-map", "0:v:0",
-            "-map", "1:a:0",
-            "-shortest",
-            "-r", "24",
-            "-threads", "1",
-            final_video_with_music,
-        ]
-    )
-
-    cleanup_temp_files([mp3_path, endscreen_path, endscreen_concat_file, final_video_path])
+    cleanup_temp_files([mp3_path, endscreen_path, main_video_with_music, video_with_endscreen_no_music, 
+                       main_video_ts, endscreen_ts, video_with_endscreen_ts])
+    if len(video_files) > 1:
+        cleanup_temp_files([main_video_path])
+    
     return final_video_with_endscreen
 
 
