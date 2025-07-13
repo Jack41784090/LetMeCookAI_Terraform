@@ -36,6 +36,11 @@ variable "generated_videos_s3_bucket_name" {
   type        = string
 }
 
+variable "minimax_key" {
+  description = "API key for MINIMAX service"
+  type        = string
+}
+
 variable "fal_key" {
   description = "API key for FAL service"
   type        = string

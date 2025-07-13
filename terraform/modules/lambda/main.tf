@@ -56,6 +56,7 @@ resource "aws_lambda_function" "request_media_generation" {
 
   environment {
     variables = {
+      MINIMAX_KEY                  = var.minimax_key
       FAL_KEY                      = var.fal_key
       JOB_QUEUE_URL                = var.sqs_queue_url
       S3_BUCKET                    = var.generated_videos_s3_bucket_name
@@ -74,13 +75,13 @@ resource "aws_lambda_layer_version" "compose_media_layer" {
 }
 
 resource "aws_lambda_function" "compose_media" {
-  filename      = var.compose_media_package_path
-  function_name = "${var.app_name}-compose-media"
-  role          = var.lambda_role_arn
-  handler       = "compose_media.lambda_handler"
-  runtime       = var.lambda_runtime
-  timeout       = 60 * 15
-  memory_size   = 3008
+  filename         = var.compose_media_package_path
+  function_name    = "${var.app_name}-compose-media"
+  role             = var.lambda_role_arn
+  handler          = "compose_media.lambda_handler"
+  runtime          = var.lambda_runtime
+  timeout          = 60 * 15
+  memory_size      = 3008
   source_code_hash = filebase64sha256(var.compose_media_package_path)
   layers = [
     aws_lambda_layer_version.compose_media_layer.arn,
@@ -118,11 +119,11 @@ resource "aws_lambda_function" "upload_youtube" {
 
   environment {
     variables = {
-      S3_BUCKET                = var.generated_videos_s3_bucket_name
-      JOB_COORDINATION_TABLE   = var.job_coordination_table_name
-      YOUTUBE_CLIENT_ID        = var.youtube_client_id
-      YOUTUBE_CLIENT_SECRET    = var.youtube_client_secret
-      YOUTUBE_REFRESH_TOKEN    = var.youtube_refresh_token
+      S3_BUCKET              = var.generated_videos_s3_bucket_name
+      JOB_COORDINATION_TABLE = var.job_coordination_table_name
+      YOUTUBE_CLIENT_ID      = var.youtube_client_id
+      YOUTUBE_CLIENT_SECRET  = var.youtube_client_secret
+      YOUTUBE_REFRESH_TOKEN  = var.youtube_refresh_token
     }
   }
 }

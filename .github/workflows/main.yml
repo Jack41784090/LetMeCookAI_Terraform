@@ -115,6 +115,7 @@ jobs:
           terraform plan \
             -out=tfplan \
             -var="environment=${{ github.event.inputs.environment || 'dev' }}" \
+            -var="minimax_key=${{ secrets.MINIMAX_API_KEY }}" \
             -var="fal_key=${{ secrets.FAL_API_KEY }}" \
             -var="youtube_client_id=${{ secrets.YOUTUBE_CLIENT_ID }}" \
             -var="youtube_client_secret=${{ secrets.YOUTUBE_CLIENT_SECRET }}" \
