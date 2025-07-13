@@ -4,7 +4,7 @@ resource "aws_scheduler_schedule" "daily-shorts-script-make" {
     mode                      = "FLEXIBLE"
     maximum_window_in_minutes = 120
   }
-  schedule_expression = "cron(0 0 * * ? *)" # This cron expression runs the script daily at midnight UTC
+  schedule_expression = "cron(0 0,12 * * ? *)"
   target {
     arn      = var.request_script_lambda_arn
     role_arn = var.request_script_lambda_role
