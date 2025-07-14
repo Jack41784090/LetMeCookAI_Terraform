@@ -126,6 +126,11 @@ variable "tags" {
   default     = {}
 }
 
+variable "minimax_key" {
+  description = "Key for Minimax API"
+  type = string
+}
+
 variable "fal_key" {
   description = "FAL API key"
   type        = string
